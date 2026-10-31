@@ -3,11 +3,11 @@ import {Hono} from "hono";
 
 
 
-const app = new Hono();
+export const app = new Hono();
 
-app.get("api/v1/health",(req)=>{
-    return req.json({status:"ok"})
-})
+app.get("/api/v1/health", (c) => {
+    return c.json({ status: "ok" });
+});
 
 
 
