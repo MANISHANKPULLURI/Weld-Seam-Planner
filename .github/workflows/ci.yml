@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
-    paths: ['backend/**', '.github/workflows/ci.yml']
+    branches: [main, frontend-features]
+    paths: ['backend/**', 'frontend/**', '.github/workflows/ci.yml']
   pull_request:
     branches: [main]
-    paths: ['backend/**', '.github/workflows/ci.yml']
+    paths: ['backend/**', 'frontend/**', '.github/workflows/ci.yml']
 
 permissions:
   contents: read
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  backend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -25,17 +25,35 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
       - name: Install deps
         run: bun install --frozen-lockfile
-
       - name: Typecheck
         run: bun run check
-
       - name: Test
         run: bun run test
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run check
+      - name: Test
+        run: bun run test
+      - name: Build
+        run: bun run build

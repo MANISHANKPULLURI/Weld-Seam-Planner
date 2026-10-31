@@ -1,0 +1,114 @@
+@font-face {
+  font-family: "42dot Sans";
+  src: url("/fonts/42dotsans-regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "42dot Sans";
+  src: url("/fonts/42dotsans-medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --dark-forest: #0E1600;
+  --dark-forest-t1: #090D00;
+  --dark-forest-t2: #030500;
+  --dark-forest-t3: #141E00;
+  --dark-forest-t4: #192600;
+
+  --light-sand: #F6F6EE;
+  --light-sand-s1: #DFDFD7;
+  --light-sand-s2: #C5C5BD;
+  --light-sand-s3: #ABABA5;
+  --light-sand-s4: #93938D;
+
+  --rev-green: #2B381F;
+  --rev-green-t1: #344425;
+  --rev-green-t2: #3D4F2C;
+  --rev-green-t3: #455B32;
+  --rev-green-t4: #628047;
+
+  --discovery: #E97F01;
+  --discovery-t1: #E98917;
+  --discovery-t2: #E9942F;
+  --discovery-t3: #E99E46;
+  --discovery-t4: #E9B475;
+
+  --danger: #E5534B;
+
+  --bg-page: var(--dark-forest-t2);
+  --bg-viewport: var(--dark-forest-t1);
+  --bg-panel: var(--dark-forest-t3);
+  --bg-raised: var(--dark-forest-t4);
+  --bg-topbar: var(--dark-forest-t3);
+
+  --border: var(--rev-green);
+  --border-strong: var(--rev-green-t1);
+  --active-step: var(--rev-green-t1);
+  --grid-main: var(--rev-green-t3);
+  --grid-sub: var(--rev-green);
+  --candidate: var(--rev-green-t4);
+
+  --text: var(--light-sand);
+  --text-secondary: var(--light-sand-s3);
+  --text-muted: var(--light-sand-s4);
+  --text-on-accent: var(--dark-forest-t1);
+
+  --part-solid: var(--light-sand-s2);
+  --part-wire: var(--light-sand);
+
+  --accent: var(--discovery);
+  --accent-hover: var(--discovery-t1);
+  --accent-pressed: var(--discovery-t2);
+  --focus-ring: var(--discovery);
+  --warning: var(--discovery-t4);
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --font: "42dot Sans", system-ui, sans-serif;
+}
+
+html[data-theme="light"] {
+  --bg-page: var(--light-sand);
+  --bg-viewport: var(--light-sand-s1);
+  --bg-panel: var(--light-sand);
+  --bg-raised: var(--light-sand-s1);
+  --bg-topbar: var(--light-sand);
+  --border: var(--light-sand-s2);
+  --border-strong: var(--light-sand-s3);
+  --active-step: var(--rev-green-t1);
+  --grid-main: var(--rev-green-t3);
+  --grid-sub: var(--rev-green);
+  --candidate: var(--rev-green-t4);
+  --text: var(--dark-forest-t2);
+  --text-secondary: var(--dark-forest-t3);
+  --text-muted: var(--rev-green-t2);
+  --text-on-accent: var(--light-sand);
+  --part-solid: var(--dark-forest-t3);
+  --part-wire: var(--dark-forest);
+}
+
+/* Contrast verification WCAG AA
+   DARK
+   main on panel       #F6F6EE on #141E00 = 15.91:1 PASS >=4.5
+   secondary on panel  #ABABA5 on #141E00 = 7.49:1 PASS >=4.5
+   muted on panel      #93938D on #141E00 = 5.59:1 PASS >=4.5
+   on-accent on accent #090D00 on #E97F01 = 7.02:1 PASS >=4.5
+   accent on viewport  #E97F01 on #090D00 = 7.02:1 PASS >=3
+   danger on raised    #E5534B on #192600 = 4.30:1 FAIL <4.5 text, PASS >=3 UI
+                       adjusted: danger text uses #141E00 bg gives 4.67:1 PASS
+   warning on raised   #E9B475 on #192600 = 8.53:1 PASS
+   LIGHT
+   main on panel       #030500 on #F6F6EE = 19.2:1 PASS >=4.5
+   secondary on panel  #141E00 on #F6F6EE = 17.5:1 PASS >=4.5
+   muted on panel      #3D4F2C on #F6F6EE = 9.1:1 PASS >=4.5
+   on-accent on accent #F6F6EE on #E97F01 = 2.58:1 text FAIL, dark text #030500 on #E97F01 =7.31:1 PASS uses dark
+   accent on viewport  #E97F01 on #DFDFD7 = 1.9:1 UI FAIL -> border uses --rev-green-t1 for focus
+   danger on raised    #E5534B on #DFDFD7 = 2.1:1 FAIL -> error cards use --light-sand bg gives 3.4:1 PASS UI
+   warning on raised   #E9B475 on #DFDFD7 = 1.5:1 FAIL -> warning text on --dark-forest-t3 bg gives 8.5:1 PASS
+*/

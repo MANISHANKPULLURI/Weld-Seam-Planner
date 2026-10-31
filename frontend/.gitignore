@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# keep self-hosted fonts and images (required by spec)
+!public/fonts/
+!public/fonts/**
+!src/assets/
+!src/assets/**
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
