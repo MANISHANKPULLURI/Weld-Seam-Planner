@@ -4,8 +4,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev":"bun --hot src/index.ts",
-    "start":"bun src/index.ts"
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "check": "tsc --noEmit",
+    "test": "bun test --bail"
   },
   "devDependencies": {
     "@types/bun": "latest"
