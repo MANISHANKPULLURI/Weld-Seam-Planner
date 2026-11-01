@@ -1,52 +1,98 @@
-import type { WorkerOut, StageId } from "../workers/mesh.worker";
 import { useStore } from "../state/store";
 
-let worker: Worker | null = null;
-const stageStart = new Map<StageId, number>();
-let totalDelay = 0;
+const API_BASE = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || "http://localhost:8000";
 
-function getWorker(): Worker {
-  if (!worker) worker = new Worker(new URL("../workers/mesh.worker.ts", import.meta.url), { type: "module" });
-  return worker;
+function toHealth(raw: {
+  triangles: number;
+  bodies: number;
+  openEdges: number;
+  nonManifold?: number;
+  bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } };
+}) {
+  return {
+    triangles: raw.triangles,
+    bodies: raw.bodies,
+    openEdges: raw.openEdges,
+    bounds: raw.bounds,
+    hasFlippedFaces: false,
+  };
 }
 
-export function analyseFile(buffer: ArrayBuffer, fileName: string) {
+export async function analyseFile(buffer: ArrayBuffer, fileName: string) {
+
   const store = useStore.getState();
   store.startAnalysing(fileName, buffer.slice(0));
-  stageStart.clear();
-  totalDelay = 0;
-  const w = getWorker();
-  w.onmessage = (e: MessageEvent<WorkerOut>) => {
-    const msg = e.data;
-    if (msg.type === "stage") {
-      const id = msg.id as StageId;
-      if (msg.status === "start") {
-        stageStart.set(id, Date.now());
-        useStore.getState().setStage(id, "active");
-      } else {
-        const start = stageStart.get(id) ?? Date.now();
-        const elapsed = Date.now() - start;
-        const needed = Math.max(0, 300 - elapsed);
-        const remainingBudget = Math.max(0, 1200 - totalDelay);
-        const delay = Math.min(needed, remainingBudget);
-        totalDelay += delay;
-        setTimeout(() => useStore.getState().setStage(id, "done"), delay);
-      }
-    } else if (msg.type === "done") {
-      const doneAll = () => useStore.getState().finishChecked(msg.health, { positions: msg.positions, indices: msg.indices, health: msg.health }, false);
-      const pending = totalDelay;
-      if (pending > 0) setTimeout(doneAll, pending + 20);
-      else doneAll();
-    } else if (msg.type === "error") {
-      useStore.setState({ phase: "error", error: msg.message, stages: { read: "error", weld: "pending", topology: "pending", measure: "pending" } });
+
+  const stages: import("../state/store").StageId[] = ["read", "weld", "topology", "measure"];
+
+  for (const s of stages) useStore.getState().setStage(s, "active");
+
+  try {
+
+    const res = await fetch(`${API_BASE}/api/v1/mesh/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: buffer,
+    });
+
+    const data = await res.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+
+    if (!res.ok) {
+      throw new Error(data.error || "Validation failed");
     }
-  };
-  w.onerror = () => {
-    useStore.setState({ phase: "error", error: "This file doesn't look like a valid STL." });
-  };
-  w.postMessage({ type: "parse", buffer, fileName }, [buffer]);
+
+    const raw = data as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+    const health = toHealth(raw.health);
+    const positions = new Float32Array(raw.mesh.positions);
+    const indices = new Uint32Array(raw.mesh.indices);
+
+    for (const s of stages) useStore.getState().setStage(s, "done");
+
+    useStore.getState().finishChecked(health, { positions, indices, health }, false);
+
+  } catch (err) {
+
+    const message = err instanceof Error ? err.message : "This file doesn't look like a valid STL.";
+    useStore.setState({ phase: "error", error: message, stages: { read: "error", weld: "pending", topology: "pending", measure: "pending" } });
+  }
+}
+
+export async function repairFile() {
+
+  const state = useStore.getState();
+  const buf = state.originalBuffer;
+
+  if (!buf) return;
+
+  useStore.setState({ phase: "repairing" });
+
+  try {
+
+    const res = await fetch(`${API_BASE}/api/v1/mesh/repair`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: buf,
+    });
+
+    const data = await res.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+
+    if (!res.ok) {
+      throw new Error(data.error || "Repair failed");
+    }
+
+    const raw = data as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+    const health = toHealth(raw.health);
+    const positions = new Float32Array(raw.mesh.positions);
+    const indices = new Uint32Array(raw.mesh.indices);
+
+    useStore.getState().finishChecked(health, { positions, indices, health }, true);
+
+  } catch (err) {
+
+    const message = err instanceof Error ? err.message : "Repair failed";
+    useStore.setState({ phase: "error", error: message });
+  }
 }
 
 export function resetWorker() {
-  if (worker) { worker.terminate(); worker = null; }
 }

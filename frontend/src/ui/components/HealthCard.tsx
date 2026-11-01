@@ -2,7 +2,6 @@ import { useStore } from "../../state/store";
 import { CheckIcon, AlertIcon } from "../icons";
 import { describeHealth } from "../../domain/mesh/describe";
 import { REPAIR_AVAILABLE } from "../../domain/mesh/repair";
-import { writeBinaryStl } from "../../domain/mesh/write";
 
 export function HealthCard() {
   const health = useStore((s) => s.health);
@@ -31,16 +30,14 @@ export function HealthCard() {
   if (!health || !verdict) return null;
 
   if (repaired && originalHealth) {
-    const download = () => {
-      const m = useStore.getState().mesh;
-      if (!m) return;
-      const triangles: import("../../domain/mesh/primitives").Triangle[] = [];
-      for (let i = 0; i < m.indices.length; i += 3) {
-        const a = m.indices[i] * 3, b = m.indices[i + 1] * 3, c = m.indices[i + 2] * 3;
-        triangles.push({ a: { x: m.positions[a], y: m.positions[a + 1], z: m.positions[a + 2] }, b: { x: m.positions[b], y: m.positions[b + 1], z: m.positions[b + 2] }, c: { x: m.positions[c], y: m.positions[c + 1], z: m.positions[c + 2] } });
-      }
-      const buf = writeBinaryStl({ triangles });
-      const blob = new Blob([buf], { type: "model/stl" });
+    const download = async () => {
+      const state = useStore.getState();
+      const buf = state.originalBuffer;
+      if (!buf) return;
+      const API_BASE = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || "http://localhost:8000";
+      const res = await fetch(`${API_BASE}/api/v1/mesh/repair/binary`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: buf });
+      if (!res.ok) return;
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a"); el.href = url; el.download = "repaired.stl"; el.click(); URL.revokeObjectURL(url);
     };
@@ -101,7 +98,7 @@ export function HealthCard() {
       <div className="result-explainer">Open edges can be intentional, like a nozzle or a manhole. Repair only if this part should be closed.</div>
       {!REPAIR_AVAILABLE && <div className="result-muted">Automatic repair isn't available yet.</div>}
       <div className="result-actions">
-        {REPAIR_AVAILABLE && <button type="button" className="btn-secondary">Repair</button>}
+        {REPAIR_AVAILABLE && <button type="button" className="btn-secondary" onClick={async () => { const { repairFile } = await import("../../lib/meshClient"); await repairFile(); }}>Repair</button>}
         <button type="button" className="btn-primary" onClick={() => setStep("seams")}>Continue as is</button>
         <button type="button" className="btn-ghost" onClick={loadAnother}>Load another</button>
       </div>
