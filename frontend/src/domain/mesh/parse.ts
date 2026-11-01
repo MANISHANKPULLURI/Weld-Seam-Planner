@@ -5,10 +5,8 @@ export function parseStl(buffer: ArrayBuffer): Mesh {
   if (bytes.length === 0) throw new Error("No triangles found. This doesn't look like an STL file.");
   const text = new TextDecoder().decode(bytes.slice(0, 512));
   if (text.trimStart().startsWith("solid")) {
-    try {
-      const ascii = new TextDecoder().decode(bytes);
-      if (ascii.includes("facet normal")) return parseAscii(ascii);
-    } catch {}
+    const ascii = new TextDecoder().decode(bytes);
+    if (ascii.includes("facet normal")) return parseAscii(ascii);
   }
   return parseBinary(buffer);
 }
