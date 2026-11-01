@@ -1,7 +1,7 @@
 import { MeshError } from "./types.ts";
 
 
-export const MAX_TRIANGLES = 5_000_000;
+export const MAX_TRIANGLES = 15_000_000;
 
 const MIN_BYTES = 84;
 

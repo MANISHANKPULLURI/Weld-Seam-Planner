@@ -24,8 +24,10 @@ type Store = {
   mesh: MeshData;
   originalMesh: MeshData;
   originalBuffer: ArrayBuffer | null;
+  originalFile: File | null;
   stages: Record<StageId, StageStatus>;
   repairStages: Record<string, StageStatus>;
+  progress: number;
   tool: Tool;
   projection: Projection;
   wireframe: boolean;
@@ -44,7 +46,9 @@ type Store = {
   setWireframe: (v: boolean) => void;
   setView: (v: ViewId) => void;
   resetView: () => void;
+  setProgress: (v: number) => void;
   startAnalysing: (name: string, buffer: ArrayBuffer) => void;
+  startAnalysingFile: (name: string, file: File) => void;
   finishChecked: (health: Health, mesh: MeshData, repaired: boolean) => void;
   undoRepair: () => void;
   loadAnother: () => void;
@@ -64,8 +68,10 @@ export const useStore = create<Store>((set) => ({
   mesh: null,
   originalMesh: null,
   originalBuffer: null,
+  originalFile: null,
   stages: { ...initialStages },
   repairStages: {},
+  progress: 0,
   tool: "select",
   projection: "perspective",
   wireframe: false,
@@ -84,19 +90,21 @@ export const useStore = create<Store>((set) => ({
   setWireframe: (wireframe) => set({ wireframe }),
   setView: (view) => set({ view }),
   resetView: () => set({ view: "iso" }),
-  startAnalysing: (fileName, buffer) => set({ phase: "analysing", fileName, originalBuffer: buffer, error: null, stages: { ...initialStages }, verdict: null }),
+  setProgress: (progress) => set({ progress }),
+  startAnalysing: (fileName, buffer) => set({ phase: "analysing", fileName, originalBuffer: buffer, originalFile: null, error: null, stages: { ...initialStages }, verdict: null, progress: 0 }),
+  startAnalysingFile: (fileName, file) => set({ phase: "analysing", fileName, originalFile: file, originalBuffer: null, error: null, stages: { ...initialStages }, verdict: null, progress: 0 }),
   finishChecked: (health, mesh, repaired) => set((s) => {
     const isIssues = health.openEdges > 0 || health.bodies > 1 || health.hasFlippedFaces;
     const verdict: Verdict = isIssues ? "issues" : "pass";
     const stagesDone: Record<StageId, StageStatus> = { read: "done", weld: "done", topology: "done", measure: "done" };
     if (s.phase === "repairing" || repaired) {
-      return { phase: "checked", health, mesh, verdict, repaired: true, stages: stagesDone, originalHealth: s.originalHealth ?? s.health, originalMesh: s.originalMesh ?? s.mesh };
+      return { phase: "checked", health, mesh, verdict, repaired: true, stages: stagesDone, originalHealth: s.originalHealth ?? s.health, originalMesh: s.originalMesh ?? s.mesh, progress: 100 };
     }
-    return { phase: "checked", health, mesh, verdict, stages: stagesDone };
+    return { phase: "checked", health, mesh, verdict, stages: stagesDone, progress: 100 };
   }),
   undoRepair: () => set((s) => {
     if (!s.originalMesh || !s.originalHealth) return {};
     return { mesh: s.originalMesh, health: s.originalHealth, repaired: false, verdict: s.originalHealth.openEdges > 0 || s.originalHealth.bodies > 1 ? "issues" : "pass" };
   }),
-  loadAnother: () => set({ phase: "empty", verdict: null, repaired: false, fileName: null, error: null, health: null, mesh: null, originalBuffer: null, stages: { ...initialStages } }),
+  loadAnother: () => set({ phase: "empty", verdict: null, repaired: false, fileName: null, error: null, health: null, mesh: null, originalBuffer: null, originalFile: null, stages: { ...initialStages }, progress: 0 }),
 }));

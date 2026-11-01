@@ -17,6 +17,7 @@ const REPAIR_STAGES = [
 export function CheckProgress() {
   const phase = useStore((s) => s.phase);
   const stages = useStore((s) => s.stages);
+  const progress = useStore((s) => s.progress);
   const repairing = phase === "repairing";
   const list = repairing ? REPAIR_STAGES.map((r) => ({ id: r.id as never, label: r.label })) as unknown as typeof STAGES : STAGES;
   const active = (Object.entries(stages) as [string, string][]).find(([, v]) => v === "active")?.[0];
@@ -26,6 +27,10 @@ export function CheckProgress() {
   return (
     <div className="check-card" role="status" aria-live="polite">
       <div className="check-title">{title}</div>
+      <div className="check-progress-track" style={{ height: 4, background: "var(--border)", borderRadius: 2, overflow: "hidden", marginBottom: 12 }}>
+        <div className="check-progress-fill" style={{ width: `${progress}%`, height: "100%", background: "var(--accent)", transition: "width 0.2s ease" }} />
+      </div>
+      <div className="check-progress-text" style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>{progress > 0 && progress < 100 ? `${progress}%` : ""}</div>
       <ul className="check-stages">
         {list.map((s) => {
           const state = (stages as Record<string, string>)[s.id] ?? "pending";
@@ -39,7 +44,7 @@ export function CheckProgress() {
           );
         })}
       </ul>
-      <div className="check-status" aria-live="polite">{activeLabel ? `${activeLabel}…` : ""}</div>
+      <div className="check-status" aria-live="polite">{activeLabel ? `${activeLabel}…` : progress > 0 && progress < 100 ? `Uploading ${progress}%` : ""}</div>
     </div>
   );
 }
