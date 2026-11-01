@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "test": "echo no tests"
+    "test": "bun test --bail"
   },
   "dependencies": {
     "react": "^19.3.1",
