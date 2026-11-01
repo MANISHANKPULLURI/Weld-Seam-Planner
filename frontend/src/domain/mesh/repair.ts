@@ -1,6 +1,6 @@
 import type { Mesh } from "./primitives";
 
-export const REPAIR_AVAILABLE = false;
+export const REPAIR_AVAILABLE = true;
 
 export interface RepairResult {
   mesh: Mesh;

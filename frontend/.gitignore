@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# dotenv
+.env
+.env.*
+
 # keep self-hosted fonts and images (required by spec)
 !public/fonts/
 !public/fonts/**

@@ -1,0 +1,12 @@
+# dotenv
+.env
+.env.*
+
+# keep self-hosted fonts and images (required by spec)
+!frontend/public/fonts/
+!frontend/public/fonts/**
+!frontend/src/assets/
+!frontend/src/assets/**
+
+node_modules
+dist
