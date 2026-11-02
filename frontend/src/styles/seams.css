@@ -104,3 +104,94 @@
   cursor: pointer;
 }
 .view-segmented button[aria-pressed="true"] { background: var(--bg-raised); color: var(--text); }
+.view-segmented button:hover { background: var(--bg-raised); }
+
+.view-controls-top-right {
+  top: 8px;
+  right: 8px;
+  left: auto;
+  max-width: min(560px, 70vw);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+.view-controls-bottom-right {
+  bottom: 8px;
+  right: 8px;
+  left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 55vw;
+  gap: 4px;
+}
+.view-btn-compact {
+  padding: 0 7px;
+  height: 26px;
+  font-size: 11px;
+}
+.view-btn-compact svg { width: 10px; height: 10px; }
+
+.orientation-gizmo-host {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+.orientation-gizmo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.orientation-gizmo-canvas {
+  border-radius: 999px;
+  display: block;
+  background: transparent;
+}
+.orientation-gizmo-legend {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  display: flex;
+  gap: 6px;
+  line-height: 1;
+}
+.orientation-gizmo-actions {
+  display: flex;
+  gap: 3px;
+}
+.gizmo-btn {
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+}
+.gizmo-btn:hover { background: var(--rev-green-t1); color: var(--text); }
+
+/* avoid overlap between gizmo and size chip */
+.view-controls-bottom-left.view-chip {
+  bottom: 8px;
+  left: 96px; /* offset from gizmo */
+}
+@media (max-width: 640px) {
+  .view-controls-top-right { max-width: 96vw; gap: 4px; }
+  .view-controls-bottom-right { max-width: 96vw; }
+  .orientation-gizmo-host { bottom: 48px; left: 8px; }
+  .view-controls-bottom-left.view-chip { left: 8px; bottom: 8px; }
+}

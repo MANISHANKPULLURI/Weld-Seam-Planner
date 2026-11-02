@@ -2,7 +2,6 @@ import { useStore } from "../../state/store";
 import { CheckIcon, AlertIcon } from "../icons";
 import { describeHealth } from "../../domain/mesh/describe";
 import { REPAIR_AVAILABLE } from "../../domain/mesh/repair";
-import { writeBinaryStl } from "../../domain/mesh/write";
 
 export function HealthCard() {
   const health = useStore((s) => s.health);
@@ -32,14 +31,30 @@ export function HealthCard() {
 
   if (repaired && originalHealth) {
     const download = () => {
+      const binary = useStore.getState().repairedBinary;
+      if (binary) {
+        const blob = new Blob([binary], { type: "model/stl" });
+        const url = URL.createObjectURL(blob);
+        const el = document.createElement("a"); el.href = url; el.download = "repaired.stl"; el.click(); URL.revokeObjectURL(url);
+        return;
+      }
+      // Fallback: serialize current mesh via backend-equivalent logic if binary not stored
       const m = useStore.getState().mesh;
       if (!m) return;
-      const triangles: import("../../domain/mesh/primitives").Triangle[] = [];
-      for (let i = 0; i < m.indices.length; i += 3) {
-        const a = m.indices[i]! * 3, b = m.indices[i + 1]! * 3, c = m.indices[i + 2]! * 3;
-        triangles.push({ a: { x: m.positions[a]!, y: m.positions[a + 1]!, z: m.positions[a + 2]! }, b: { x: m.positions[b]!, y: m.positions[b + 1]!, z: m.positions[b + 2]! }, c: { x: m.positions[c]!, y: m.positions[c + 1]!, z: m.positions[c + 2]! } });
+      // Lightweight STL writer (display-only) - backend remains authoritative
+      const count = m.indices.length / 3;
+      const buf = new ArrayBuffer(84 + count * 50);
+      const view = new DataView(buf);
+      view.setUint32(80, count, true);
+      let off = 84;
+      for (let i = 0; i < count; i++) {
+        view.setFloat32(off, 0, true); view.setFloat32(off+4, 0, true); view.setFloat32(off+8, 1, true); off+=12;
+        for (let k = 0; k < 3; k++) {
+          const idx = m.indices[i*3+k]!*3;
+          view.setFloat32(off, m.positions[idx]!, true); view.setFloat32(off+4, m.positions[idx+1]!, true); view.setFloat32(off+8, m.positions[idx+2]!, true); off+=12;
+        }
+        view.setUint16(off, 0, true); off+=2;
       }
-      const buf = writeBinaryStl({ triangles });
       const blob = new Blob([buf], { type: "model/stl" });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a"); el.href = url; el.download = "repaired.stl"; el.click(); URL.revokeObjectURL(url);

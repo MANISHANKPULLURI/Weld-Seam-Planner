@@ -8,7 +8,7 @@ export type StageId = "read" | "weld" | "topology" | "measure";
 export type StageStatus = "pending" | "active" | "done" | "warning" | "error";
 export type Tool = "select" | "draw";
 export type Projection = "perspective" | "orthographic";
-export type ViewId = "iso" | "top" | "front" | "right";
+export type ViewId = "iso" | "top" | "bottom" | "front" | "back" | "left" | "right";
 
 export type Units = "mm" | "cm" | "m" | "inch";
 export type UpAxis = "+z" | "+y";
@@ -19,6 +19,7 @@ type Store = {
   phase: Phase;
   verdict: Verdict | null;
   repaired: boolean;
+  repairedBinary: ArrayBuffer | null;
   step: Step;
   fileName: string | null;
   error: string | null;
@@ -59,7 +60,8 @@ type Store = {
   setViewMode: (m: "solid" | "wireframe" | "triangles") => void;
   startAnalysing: (name: string, buffer: ArrayBuffer) => void;
   startAnalysingFile: (name: string, file: File) => void;
-  finishChecked: (health: Health, mesh: MeshData, repaired: boolean, generation: number) => void;
+  finishChecked: (health: Health, mesh: MeshData, repaired: boolean, generation: number, binary?: ArrayBuffer | null) => void;
+  setRepairedBinary: (b: ArrayBuffer | null) => void;
   undoRepair: () => void;
   loadAnother: () => void;
 };
@@ -70,6 +72,7 @@ export const useStore = create<Store>((set) => ({
   phase: "empty",
   verdict: null,
   repaired: false,
+  repairedBinary: null,
   step: "part",
   fileName: null,
   error: null,
@@ -108,9 +111,9 @@ export const useStore = create<Store>((set) => ({
   setUnits: (units) => set((s) => ({ frame: { ...s.frame, units, unitsGuessed: false } })),
   setUpAxis: (upAxis) => set((s) => ({ frame: { ...s.frame, upAxis, upGuessed: false } })),
   confirmFrame: () => set((s) => ({ frame: { ...s.frame, confirmed: true } })),
-  startAnalysing: (fileName, buffer) => set((s) => ({ phase: "analysing", fileName, originalBuffer: buffer, originalFile: null, error: null, stages: { ...initialStages }, verdict: null, progress: 0, generation: s.generation + 1, frame: { ...s.frame, confirmed: false } })),
-  startAnalysingFile: (fileName, file) => set((s) => ({ phase: "analysing", fileName, originalFile: file, originalBuffer: null, error: null, stages: { ...initialStages }, verdict: null, progress: 0, generation: s.generation + 1, frame: { ...s.frame, confirmed: false } })),
-  finishChecked: (health, mesh, repaired, generation) => set((s) => {
+  startAnalysing: (fileName, buffer) => set((s) => ({ phase: "analysing", fileName, originalBuffer: buffer, originalFile: null, error: null, stages: { ...initialStages }, verdict: null, progress: 0, generation: s.generation + 1, frame: { ...s.frame, confirmed: false }, repairedBinary: null })),
+  startAnalysingFile: (fileName, file) => set((s) => ({ phase: "analysing", fileName, originalFile: file, originalBuffer: null, error: null, stages: { ...initialStages }, verdict: null, progress: 0, generation: s.generation + 1, frame: { ...s.frame, confirmed: false }, repairedBinary: null })),
+  finishChecked: (health, mesh, repaired, generation, binary) => set((s) => {
     if (generation !== s.generation) return {};
     const isIssues = health.openEdges > 0 || health.bodies > 1 || health.hasFlippedFaces;
     const verdict: Verdict = isIssues ? "issues" : "pass";
@@ -130,13 +133,14 @@ export const useStore = create<Store>((set) => ({
       frame = { units, unitsGuessed, upAxis, upGuessed, confirmed: false };
     }
     if (s.phase === "repairing" || repaired) {
-      return { phase: "checked", health, mesh, verdict, repaired: true, stages: stagesDone, originalHealth: s.originalHealth ?? s.health, originalMesh: s.originalMesh ?? s.mesh, progress: 100, frame };
+      return { phase: "checked", health, mesh, verdict, repaired: true, stages: stagesDone, originalHealth: s.originalHealth ?? s.health, originalMesh: s.originalMesh ?? s.mesh, progress: 100, frame, repairedBinary: binary ?? s.repairedBinary ?? null };
     }
-    return { phase: "checked", health, mesh, verdict, stages: stagesDone, progress: 100, frame };
+    return { phase: "checked", health, mesh, verdict, stages: stagesDone, progress: 100, frame, repairedBinary: null };
   }),
+  setRepairedBinary: (repairedBinary) => set({ repairedBinary }),
   undoRepair: () => set((s) => {
     if (!s.originalMesh || !s.originalHealth) return {};
-    return { mesh: s.originalMesh, health: s.originalHealth, repaired: false, verdict: s.originalHealth.openEdges > 0 || s.originalHealth.bodies > 1 ? "issues" : "pass" };
+    return { mesh: s.originalMesh, health: s.originalHealth, repaired: false, repairedBinary: null, verdict: s.originalHealth.openEdges > 0 || s.originalHealth.bodies > 1 ? "issues" : "pass" };
   }),
-  loadAnother: () => set({ phase: "empty", verdict: null, repaired: false, fileName: null, error: null, health: null, mesh: null, originalBuffer: null, originalFile: null, stages: { ...initialStages }, progress: 0 }),
+  loadAnother: () => set({ phase: "empty", verdict: null, repaired: false, repairedBinary: null, fileName: null, error: null, health: null, mesh: null, originalBuffer: null, originalFile: null, stages: { ...initialStages }, progress: 0 }),
 }));

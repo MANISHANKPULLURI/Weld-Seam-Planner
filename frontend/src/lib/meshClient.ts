@@ -20,6 +20,13 @@ function toHealth(raw: {
   };
 }
 
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 async function uploadChunkedFromFile(file: File, mode: "validate" | "repair", onProgress: (p: number) => void) {
 
   const initRes = await fetch(`${API_BASE}/api/v1/mesh/upload/init`, {
@@ -50,10 +57,10 @@ async function uploadChunkedFromFile(file: File, mode: "validate" | "repair", on
   await Promise.all(Array.from({ length: Math.min(4, totalChunksFile) }, () => workerFile()));
   onProgress(90);
   const finalResFile = await fetch(`${API_BASE}/api/v1/mesh/upload/${uploadIdFile}/complete?mode=${mode}`, { method: "POST" });
-  const dataFile = await finalResFile.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+  const dataFile = await finalResFile.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] }; binaryBase64?: string };
   if (!finalResFile.ok) throw new Error((dataFile as { error?: string }).error || `${mode} failed`);
   onProgress(100);
-  return dataFile as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+  return dataFile as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] }; binaryBase64?: string };
 }
 
 
@@ -114,7 +121,7 @@ async function uploadChunked(buffer: ArrayBuffer, fileName: string, mode: "valid
     method: "POST",
   });
 
-  const data = await finalRes.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+  const data = await finalRes.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] }; binaryBase64?: string };
 
   if (!finalRes.ok) {
     throw new Error(data.error || `${mode} failed`);
@@ -122,7 +129,7 @@ async function uploadChunked(buffer: ArrayBuffer, fileName: string, mode: "valid
 
   onProgress(100);
 
-  return data as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+  return data as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] }; binaryBase64?: string };
 }
 
 export async function analyseFileFromFile(file: File) {
@@ -305,8 +312,9 @@ export async function repairFile() {
       const health = toHealth(raw.health);
       const positions = new Float32Array(raw.mesh.positions);
       const indices = new Uint32Array(raw.mesh.indices);
+      const binary = raw.binaryBase64 ? base64ToArrayBuffer(raw.binaryBase64) : null;
       useStore.getState().setProgress(100);
-      useStore.getState().finishChecked(health, { positions, indices, health }, true, gen);
+      useStore.getState().finishChecked(health, { positions, indices, health }, true, gen, binary);
     } catch (err) {
       if (useStore.getState().generation !== gen) return;
       if (err instanceof Error && err.message === "stale") return;
@@ -329,7 +337,7 @@ export async function repairFile() {
 
   try {
 
-    let raw: { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+    let raw: { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] }; binaryBase64?: string };
 
     if (useChunked) {
 
@@ -345,7 +353,7 @@ export async function repairFile() {
         body: buf,
       });
 
-      const data = await res.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+      const data = await res.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] }; binaryBase64?: string };
 
       if (!res.ok) {
         throw new Error(data.error || "Repair failed");
@@ -360,9 +368,10 @@ export async function repairFile() {
     const health = toHealth(raw.health);
     const positions = new Float32Array(raw.mesh.positions);
     const indices = new Uint32Array(raw.mesh.indices);
+    const binary = raw.binaryBase64 ? base64ToArrayBuffer(raw.binaryBase64) : null;
 
     useStore.getState().setProgress(100);
-    useStore.getState().finishChecked(health, { positions, indices, health }, true, gen);
+    useStore.getState().finishChecked(health, { positions, indices, health }, true, gen, binary);
 
   } catch (err) {
 
