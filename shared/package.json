@@ -1,0 +1,16 @@
+{
+  "name": "@weld/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.7",
+    "zod-to-json-schema": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
