@@ -1,12 +1,16 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { secureHeaders } from "hono/secure-headers";
 import { meshRoutes } from "./routes/mesh.routes.ts";
+import { schemaRoutes } from "./routes/schema.routes.ts";
+import { weldJobRoutes } from "./routes/weldJob.routes.ts";
 
 
 export const app = new Hono();
 
 app.use(logger());
+app.use(secureHeaders());
 
 const corsOrigins = (process.env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -22,6 +26,8 @@ app.get("/api/v1/health", (c) => {
 });
 
 app.route("/api/v1/mesh", meshRoutes);
+app.route("/api/v1/schema", schemaRoutes);
+app.route("/api/v1/weld-jobs", weldJobRoutes);
 
 app.notFound((c) => {
   return c.json({ error: "Not found" }, 404);

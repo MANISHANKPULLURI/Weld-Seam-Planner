@@ -17,6 +17,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
   const phase = useStore((s) => s.phase);
   const step = useStore((s) => s.step);
   const fileName = useStore((s) => s.fileName);
+  const frame = useStore((s) => s.frame);
   const setStep = useStore((s) => s.setStep);
   const checked = phase === "checked";
   const [collapsed, setCollapsed] = useState(false);
@@ -49,7 +50,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
         <ol className="planner-steps" aria-label="Steps">
           {STEPS.map((s, idx) => {
             const isActive = step === s.id;
-            const isLocked = s.id !== "part" && !checked;
+            const isLocked = s.id !== "part" && (!checked || !frame.confirmed);
             return (
               <li key={s.id}>
                 <button
