@@ -8,9 +8,9 @@
     "start": "bun src/index.ts",
     "check": "tsc --noEmit",
     "test": "bun test --bail",
-    "generate:schema": "bun src/schemas/generate.ts",
-    "generate:frontend-types": "bun src/schemas/generate-frontend-types.ts",
-    "generate": "bun src/schemas/generate.ts && bun src/schemas/generate-frontend-types.ts"
+    "generate:schema": "bun src/controllers/weld_job_controller/generate.ts",
+    "generate:frontend-types": "bun src/controllers/weld_job_controller/generate-frontend-types.ts",
+    "generate": "bun src/controllers/weld_job_controller/generate.ts && bun src/controllers/weld_job_controller/generate-frontend-types.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

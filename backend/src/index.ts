@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
-import { meshRoutes } from "./routes/mesh.routes.ts";
-import { schemaRoutes } from "./routes/schema.routes.ts";
-import { weldJobRoutes } from "./routes/weldJob.routes.ts";
+import { meshRoutes } from "./controllers/mesh_detection_repair_controller/mesh.controller.ts";
+import { schemaRoutes } from "./controllers/weld_job_controller/schema.controller.ts";
+import { weldJobRoutes } from "./controllers/weld_job_controller/weldJob.controller.ts";
 
 
 export const app = new Hono();

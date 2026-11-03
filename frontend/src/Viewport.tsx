@@ -26,7 +26,6 @@ export default function Viewport() {
     return () => { c.dispose(); ctrlRef.current = null; };
   }, [setView]);
 
-  // keep host dataset for seam-draw guard in SceneController double-click
   useEffect(() => {
     if (hostRef.current) hostRef.current.dataset.tool = tool;
   }, [tool]);
@@ -50,7 +49,6 @@ export default function Viewport() {
     return () => window.removeEventListener("themechange", onTheme);
   }, []);
 
-  // sync viewMode/projection if store changes externally (e.g., initial)
   const projection = useStore((s) => s.projection);
   const viewMode = useStore((s) => s.viewMode);
   useEffect(() => { if (ctrl) ctrl.setProjection(projection); }, [ctrl, projection]);
@@ -67,7 +65,7 @@ export default function Viewport() {
     <div className={`viewport-wrapper${tool === "draw" ? " viewport-host-draw" : ""}`}>
       <div ref={hostRef} className="viewport-canvas" />
       <ViewControls controller={ctrl} />
-      {/* Orientation gizmo — bottom-left above size chip, or top-left */}
+      {}
       <div className="orientation-gizmo-host">
         <OrientationGizmo controller={ctrl} onView={handleGizmoView} />
       </div>

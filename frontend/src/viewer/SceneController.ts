@@ -39,7 +39,6 @@ export class SceneController {
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
   private themeHandler: (() => void) | null = null;
 
-  // gizmo callback
   private onViewChange?: (id: ViewId) => void;
 
   constructor(host: HTMLElement) {
@@ -75,13 +74,11 @@ export class SceneController {
     this.buildGridForBounds(null);
     this.buildAxesForBounds(null);
 
-    // prevent context menu
     this.onContextMenuHandler = (e: MouseEvent) => {
       if ((e.target as HTMLElement)?.closest(".viewport-canvas")) e.preventDefault();
     };
     this.renderer.domElement.addEventListener("contextmenu", this.onContextMenuHandler);
 
-    // double-click focus, guarded by tool and toolbar
     this.onDblClickHandler = (e: MouseEvent) => this.handleDoubleClick(e);
     this.renderer.domElement.addEventListener("dblclick", this.onDblClickHandler);
 
@@ -98,7 +95,6 @@ export class SceneController {
     };
     window.addEventListener("keydown", this.keyHandler);
 
-    // cleanup registry
     (this as unknown as { _cleanup: () => void })._cleanup = () => this.disposeInternal();
   }
 
@@ -108,7 +104,6 @@ export class SceneController {
     this.controls.enablePan = true;
     this.controls.enableZoom = true;
     this.controls.enableRotate = true;
-    // Left orbit, Middle/Right pan, Wheel zoom
     this.controls.mouseButtons = {
       LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: THREE.MOUSE.PAN,
@@ -120,7 +115,6 @@ export class SceneController {
     };
     this.controls.minDistance = 1;
     this.controls.maxDistance = 1e6;
-    // orthographic zoom limits
     this.cameraPersp.near = 0.1;
     this.cameraPersp.far = 1e6;
     this.cameraOrtho.near = 0.1;
@@ -134,26 +128,20 @@ export class SceneController {
     this.setViewMode(order[(idx + 1) % order.length]!);
   }
 
-  // ---------- Grid & Axes (dynamic, engineering intervals, Z-up) ----------
 
   private buildGridForBounds(bounds: typeof this.bounds) {
     this.grid.clear();
     const maxDim = bounds ? Math.max(bounds.size.x, bounds.size.y, bounds.size.z) : 400;
     const interval = chooseEngineeringInterval(maxDim);
-    // extent: round up to multiple of interval, 1.4 * maxDim
     const rawExtent = maxDim > 0 ? maxDim * 1.6 : 400;
     const extent = Math.max(interval * 4, Math.ceil(rawExtent / interval) * interval);
     const divisions = Math.max(4, Math.min(40, Math.round(extent / interval)));
-    // clamp divisions to avoid excessive lines; choose sensible subdivisions
     const size = extent;
     const main = new THREE.Color(cssVar("--grid-main") || cssVar("--rev-green-t3") || "#465B32");
     const sub = new THREE.Color(cssVar("--grid-sub") || cssVar("--rev-green") || "#283B1F");
     const g = new THREE.GridHelper(size, divisions, main, sub);
-    // GridHelper lies on XZ plane (Y-up); rotate to XY plane (Z-up)
     g.rotation.x = Math.PI / 2;
     this.grid.add(g);
-    // optional: faint reference planes for XZ and YZ as border lines (Z-up correctness visual)
-    // Keep minimal to avoid overhead; axes already show directions
     if (bounds) {
       const center = bounds.center;
       this.grid.position.set(center.x, center.y, bounds.min.z);
@@ -168,7 +156,6 @@ export class SceneController {
     const axisLen = Math.max(12, Math.min(120, maxDim * 0.4));
     const helper = new THREE.AxesHelper(axisLen);
     this.axes.add(helper);
-    // Z-up: helper axes are X(red), Y(green), Z(blue) in local space; with scene.up Z, this matches spec
     const labels: [string, THREE.Vector3, string][] = [
       ["X", new THREE.Vector3(axisLen + 4, 0, 0), "#ff4d4d"],
       ["Y", new THREE.Vector3(0, axisLen + 4, 0), "#4dff4d"],
@@ -178,12 +165,10 @@ export class SceneController {
       const canvas = document.createElement("canvas");
       canvas.width = 64; canvas.height = 32;
       const ctx = canvas.getContext("2d")!;
-      // theme-aware text color with fallback
       const cssColor = cssVar("--text-secondary") || "#ABABA5";
       ctx.fillStyle = cssColor;
       ctx.font = "bold 16px '42dot Sans', system-ui, sans-serif";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      // outline for contrast
       ctx.strokeStyle = "rgba(0,0,0,0.35)";
       ctx.lineWidth = 3;
       ctx.strokeText(text, 32, 16);
@@ -196,7 +181,6 @@ export class SceneController {
       spr.scale.set(10, 5, 1);
       spr.renderOrder = 999;
       this.axes.add(spr);
-      // colored tip sphere for orientation clarity
       const tipGeo = new THREE.SphereGeometry(1.2, 8, 8);
       const tipMat = new THREE.MeshBasicMaterial({ color });
       const tip = new THREE.Mesh(tipGeo, tipMat);
@@ -210,7 +194,6 @@ export class SceneController {
     }
   }
 
-  // ---------- Projection ----------
 
   setProjection(p: "perspective" | "orthographic") {
     if (this.projection === p) return;
@@ -223,7 +206,6 @@ export class SceneController {
     this.camera.position.copy(pos);
     this.camera.quaternion.copy(quat);
     this.controls.object = this.camera;
-    // preserve target
     this.controls.target.copy(target);
     this.controls.update();
     this.updateOrthoFrustum();
@@ -234,13 +216,11 @@ export class SceneController {
   private updateOrthoFrustum() {
     if (this.projection !== "orthographic") return;
     const aspect = this.size.w / Math.max(1, this.size.h);
-    // fit frustum to bounds or use current distance-based size
     if (this.bounds) {
       const maxDim = Math.max(this.bounds.size.x, this.bounds.size.y, this.bounds.size.z);
       const interval = chooseEngineeringInterval(maxDim);
       const rawExtent = maxDim * 1.6;
       const extent = Math.max(interval * 4, Math.ceil(rawExtent / interval) * interval);
-      // frustum height covers extent, width via aspect
       const halfH = Math.max(extent * 0.55, 10);
       const halfW = halfH * aspect;
       this.cameraOrtho.left = -halfW;
@@ -254,40 +234,34 @@ export class SceneController {
       this.cameraOrtho.right = halfW;
       this.cameraOrtho.top = halfH;
       this.cameraOrtho.bottom = -halfH;
-      // also fit to current distance if needed
     }
     this.cameraOrtho.updateProjectionMatrix();
   }
 
-  // ---------- View Mode (solid / wireframe / triangles) ----------
 
   setViewMode(mode: ViewMode) {
     this.viewMode = mode;
     if (!this.mesh) return;
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
-    // reset wireframe
     mat.wireframe = mode === "wireframe";
     mat.needsUpdate = true;
-    // triangle edges overlay
     if (mode === "triangles") {
       if (!this.triangleEdges) {
         const geo = this.mesh.geometry as THREE.BufferGeometry;
         const edges = new THREE.EdgesGeometry(geo, 1);
-        const lineMat = new THREE.LineBasicMaterial({ color: cssVar("--part-wire") || "#F6F6EE", transparent: true, opacity: 0.9 });
+        const lineMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01", transparent: true, opacity: 0.95, linewidth: 1 });
         this.triangleEdges = new THREE.LineSegments(edges, lineMat);
         this.scene.add(this.triangleEdges);
       }
       this.triangleEdges.visible = true;
-      // keep solid shading underneath
       mat.wireframe = false;
       mat.transparent = false;
       mat.opacity = 1;
     } else if (this.triangleEdges) {
       this.triangleEdges.visible = false;
     }
-    // colors per theme/mode
     const solidColor = cssVar("--part-solid") || (document.documentElement.getAttribute("data-theme")==="light" ? "#141E00" : "#C5C5BD");
-    const wireColor = cssVar("--part-wire") || (document.documentElement.getAttribute("data-theme")==="light" ? "#030500" : "#F6F6EE");
+    const wireColor = cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01";
     mat.color = new THREE.Color(mode === "wireframe" ? wireColor : solidColor);
     if (this.triangleEdges) {
       (this.triangleEdges.material as THREE.LineBasicMaterial).color = new THREE.Color(wireColor);
@@ -308,28 +282,24 @@ export class SceneController {
     this.buildGridForBounds(this.bounds);
     this.buildAxesForBounds(this.bounds);
     if (this.triangleEdges) {
-      (this.triangleEdges.material as THREE.LineBasicMaterial).color = new THREE.Color(cssVar("--part-wire") || "#F6F6EE");
+      (this.triangleEdges.material as THREE.LineBasicMaterial).color = new THREE.Color(cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01");
     }
     this.render();
-    // notify gizmo if present
   }
 
-  // ---------- Camera Views (Z-up) ----------
 
   setView(id: ViewId) { this.animateToView(id); }
 
-  resetView() { this.fitModel(true); }
+  resetView() { this.animateToView("iso"); }
 
   fitModel(animate = true) {
     if (!this.bounds) {
-      // no model: default iso
       this.animateToView("iso");
       this.updateOrthoFrustum();
       this.updateClippingPlanes();
       return;
     }
     const center = this.bounds.center.clone();
-    // Preserve current viewing direction if meaningful, otherwise use iso direction
     const currentDir = this.camera.position.clone().sub(this.controls.target).normalize();
     const isZero = currentDir.lengthSq() < 1e-6;
     const dir = isZero ? new THREE.Vector3(0.7, -0.6, 0.7).normalize() : currentDir;
@@ -349,7 +319,6 @@ export class SceneController {
   private updateClippingPlanesForDistance(distance: number) {
     if (!this.bounds) return;
     const radius = this.bounds.sphereRadius;
-    // near should be just before nearest point, far just beyond farthest
     const near = Math.max(0.1, distance - radius * 2.5);
     const far = distance + radius * 3.5 + 500;
     this.cameraPersp.near = near;
@@ -381,11 +350,8 @@ export class SceneController {
     const distance = this.bounds ? this.computeFitDistance(center) : 200;
     const { dir, up } = this.viewDirectionForId(id, distance);
     const targetPos = center.clone().add(dir.multiplyScalar(distance));
-    // set up vector appropriately
     const cam = this.camera;
-    // For top/bottom, up must be Y to avoid degeneracy; else Z
     const wasProjection = this.projection;
-    // animate position and target, and up via slerp of quaternion
     this.animateCamera(cam.position.clone(), targetPos, this.controls.target.clone(), center, 400, up);
     this.updateClippingPlanesForDistance(distance);
     if (wasProjection === "orthographic") this.updateOrthoFrustum();
@@ -431,25 +397,17 @@ export class SceneController {
     requestAnimationFrame(step);
   }
 
-  // ---------- Double-click focus (raycast, seam-draw guard) ----------
 
   private handleDoubleClick(e: MouseEvent) {
-    // ignore if toolbar/gizmo controls
     const targetEl = e.target as HTMLElement;
     if (targetEl.closest(".view-controls") || targetEl.closest(".orientation-gizmo") || targetEl.closest("button")) return;
-    // guard seam drawing: if tool is draw, double-click is finish-drawing, not focus
     try {
       const tool = (window as unknown as { __storeTool?: string }).__storeTool;
-      // we check store via dynamic import to avoid circular
       const storeTool = document.documentElement.getAttribute("data-tool");
-      // fallback: query Zustand store if available
       const isDraw = (document.querySelector(".viewport-host-draw") !== null);
       if (isDraw) return;
     } catch {}
-    // check via store import synchronously if available: use global flag set by Viewport
     const isDrawMode = this.host.classList.contains("viewport-host-draw") || this.host.closest(".viewport-host-draw") !== null || document.body.dataset.tool === "draw";
-    // alternative: check store directly via window.__useStore
-    // We'll read from data attribute set by Viewport
     if (this.host.dataset.tool === "draw") return;
 
     if (!this.mesh) return;
@@ -460,18 +418,14 @@ export class SceneController {
     const hits = this.raycaster.intersectObject(this.mesh, false);
     if (hits.length === 0) return;
     const hit = hits[0]!;
-    const pointDisplay = hit.point.clone(); // display coords
-    // convert to original for engineering (if needed externally) — but focus uses display
-    // update target and keep direction
+    const pointDisplay = hit.point.clone();
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     const dist = this.camera.position.distanceTo(this.controls.target);
-    // clamp new target to point, keep distance
     const newTarget = pointDisplay.clone();
     const newPos = newTarget.clone().add(dir.multiplyScalar(dist));
     this.animateCamera(this.camera.position.clone(), newPos, this.controls.target.clone(), newTarget, 350);
   }
 
-  // ---------- Coordinate preservation ----------
 
   getDisplayScale(): number { return this.displayScale; }
 
@@ -483,7 +437,6 @@ export class SceneController {
     return originalToDisplay(pt, this.displayScale);
   }
 
-  // for raycast consumers: returns original coordinates of hit
   raycastOriginal(event: MouseEvent): THREE.Vector3 | null {
     if (!this.mesh) return null;
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -495,14 +448,11 @@ export class SceneController {
     return this.getOriginalFromDisplay(hits[0]!.point.clone());
   }
 
-  // ---------- Mesh loading (preserve original, display scaling, disposal) ----------
 
   setMesh(positions: Float32Array, indices: Uint32Array) {
-    // preserve originals
     this.originalPositions = positions.slice();
     this.originalIndices = indices.slice();
 
-    // dispose previous
     if (this.mesh) {
       this.scene.remove(this.mesh);
       this.mesh.geometry.dispose();
@@ -527,7 +477,6 @@ export class SceneController {
       return;
     }
 
-    // compute display scale (preserve original → display may be scaled for viewability)
     const tmp = new THREE.BufferGeometry();
     tmp.setAttribute("position", new THREE.BufferAttribute(positions.slice(), 3));
     tmp.computeBoundingBox();
@@ -551,26 +500,23 @@ export class SceneController {
     const center = new THREE.Vector3().addVectors(box.min, box.max).multiplyScalar(0.5);
     this.bounds = { min: box.min.clone(), max: box.max.clone(), size, center, sphereRadius: sphere.radius };
 
-    const solidColor = cssVar("--part-solid") || "#C5C5BD";
+    const solidColor = cssVar("--part-solid") || (document.documentElement.getAttribute("data-theme")==="light" ? "#141E00" : "#C5C5BD");
     const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor), flatShading: false, wireframe: false, side: THREE.DoubleSide });
     this.mesh = new THREE.Mesh(geo, mat);
-    // depth for raycast
     this.mesh.userData.isModel = true;
 
     const lightColor = cssVar("--light-sand") || "#F6F6EE";
     const hemi = new THREE.HemisphereLight(lightColor, cssVar("--dark-forest-t2") || "#0E1600", 1.1);
     const dirLight = new THREE.DirectionalLight(lightColor, 0.9);
     dirLight.position.set(120, -80, 200);
-    // second fill light for depth perception
     const fill = new THREE.DirectionalLight(lightColor, 0.35);
     fill.position.set(-80, 120, 100);
     this.scene.add(hemi); this.scene.add(dirLight); this.scene.add(fill);
     this.lights.push(hemi, dirLight, fill);
     this.scene.add(this.mesh);
 
-    // create triangle edges but hidden initially
     const edges = new THREE.EdgesGeometry(geo, 1);
-    const edgeMat = new THREE.LineBasicMaterial({ color: cssVar("--part-wire") || "#F6F6EE", transparent: true, opacity: 0.0 });
+    const edgeMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01", transparent: true, opacity: 0.0 });
     this.triangleEdges = new THREE.LineSegments(edges, edgeMat);
     this.triangleEdges.visible = false;
     this.scene.add(this.triangleEdges);
@@ -578,11 +524,7 @@ export class SceneController {
     this.buildGridForBounds(this.bounds);
     this.buildAxesForBounds(this.bounds);
     this.setViewMode(this.viewMode);
-
-    // fit after layout
-    requestAnimationFrame(() => this.fitModel(false));
-
-    // cleanup tmp
+    this.fitModel(false);
     tmp.dispose();
   }
 
@@ -652,7 +594,6 @@ export class SceneController {
     });
   }
 
-  // expose for gizmo sync
   getCamera(): THREE.Camera { return this.camera; }
   getControls(): OrbitControls { return this.controls; }
   getBounds() { return this.bounds; }
@@ -668,7 +609,6 @@ export class SceneController {
     this.renderer.dispose();
     if (this.host.contains(this.renderer.domElement)) this.host.removeChild(this.renderer.domElement);
     if (this.raf) cancelAnimationFrame(this.raf);
-    // dispose geometries/materials
     if (this.mesh) { this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose(); }
     if (this.triangleEdges) { this.triangleEdges.geometry.dispose(); (this.triangleEdges.material as THREE.Material).dispose(); }
     for (const g of [this.grid, this.axes]) {

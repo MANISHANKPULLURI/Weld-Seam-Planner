@@ -115,6 +115,9 @@ export const useStore = create<Store>((set) => ({
   startAnalysingFile: (fileName, file) => set((s) => ({ phase: "analysing", fileName, originalFile: file, originalBuffer: null, error: null, stages: { ...initialStages }, verdict: null, progress: 0, generation: s.generation + 1, frame: { ...s.frame, confirmed: false }, repairedBinary: null })),
   finishChecked: (health, mesh, repaired, generation, binary) => set((s) => {
     if (generation !== s.generation) return {};
+    if (!health || typeof health.triangles !== "number" || !health.bounds) {
+      return { phase: "error", error: "Invalid health data from server", stages: { read: "error", weld: "pending", topology: "pending", measure: "pending" } };
+    }
     const isIssues = health.openEdges > 0 || health.bodies > 1 || health.hasFlippedFaces;
     const verdict: Verdict = isIssues ? "issues" : "pass";
     const stagesDone: Record<StageId, StageStatus> = { read: "done", weld: "done", topology: "done", measure: "done" };

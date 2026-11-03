@@ -1,23 +1,9 @@
 // AUTO-GENERATED — do not edit manually
-// Generated from backend/src/schemas via backend/src/schemas/generate-frontend-types.ts
-// Source of truth: backend/src/schemas/*.ts (Zod schemas)
-// Regenerate with: bun backend/src/schemas/generate-frontend-types.ts
 
-// JSON Schema (authoritative) is available at:
-// - backend/schema/weld-job.schema.json
-// - frontend/src/generated/weld-job.schema.json (copy)
-// - GET /api/v1/schema/weld-job
 
-// TypeScript types for frontend consumption
-// These are intentionally derived from the backend Zod schemas.
-// For full type-safety, regenerate this file after backend schema changes.
 
 export type WeldJobJsonSchema = typeof import("./weld-job.schema.json");
 
-// Re-export of backend WeldJob type shape (generated snapshot).
-// The canonical type is backend/src/schemas/weldJob.ts -> WeldJob (z.infer<typeof weldJobSchema>)
-// This frontend copy is kept in sync by the generation script.
-// If you need strict typing, run the generation script or import the JSON Schema for runtime validation.
 
 export type Vec3 = [number, number, number];
 

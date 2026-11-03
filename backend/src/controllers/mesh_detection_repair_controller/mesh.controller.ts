@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { MeshError } from "../features/mesh/types.ts";
-import { runRepairPipeline, runValidationPipeline } from "../features/mesh/pipeline.ts";
+import { MeshError } from "./types.ts";
+import { runRepairPipeline, runValidationPipeline } from "./pipeline.ts";
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";

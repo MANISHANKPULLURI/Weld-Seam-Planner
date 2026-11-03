@@ -27,9 +27,9 @@ export function HealthCard() {
     );
   }
 
-  if (!health || !verdict) return null;
+  if (!health || !verdict || typeof health.triangles !== "number") return null;
 
-  if (repaired && originalHealth) {
+  if (repaired && originalHealth && typeof originalHealth.triangles === "number") {
     const download = () => {
       const binary = useStore.getState().repairedBinary;
       if (binary) {
@@ -38,10 +38,8 @@ export function HealthCard() {
         const el = document.createElement("a"); el.href = url; el.download = "repaired.stl"; el.click(); URL.revokeObjectURL(url);
         return;
       }
-      // Fallback: serialize current mesh via backend-equivalent logic if binary not stored
       const m = useStore.getState().mesh;
       if (!m) return;
-      // Lightweight STL writer (display-only) - backend remains authoritative
       const count = m.indices.length / 3;
       const buf = new ArrayBuffer(84 + count * 50);
       const view = new DataView(buf);

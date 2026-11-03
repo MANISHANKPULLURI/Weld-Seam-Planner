@@ -31,7 +31,7 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
 
   return (
     <>
-      {/* Top-right: projection + rendering modes + fit/reset */}
+      {}
       <div className="view-controls view-controls-top view-controls-top-right" role="toolbar" aria-label="View settings">
         <div className="view-segmented" role="group" aria-label="Projection">
           <button type="button" aria-pressed={projection === "perspective"} onClick={() => proj("perspective")} title="Perspective projection (FOV 45°)">Perspective</button>
@@ -50,7 +50,7 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
         </button>
       </div>
 
-      {/* Bottom-right: standard views Z-up */}
+      {}
       <div className="view-controls view-controls-bottom-right" role="group" aria-label="Standard views — Z up">
         {(["iso", "top", "bottom", "front", "back", "left", "right"] as ViewId[]).map((id) => (
           <button
