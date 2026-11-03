@@ -83,6 +83,10 @@
   --focus-ring: var(--discovery);
   --warning: var(--discovery-t4);
 
+  --axis-x: #ff4d4d;
+  --axis-y: #4dff4d;
+  --axis-z: #4d7dff;
+
   --radius: 8px;
   --radius-sm: 6px;
   --font: "42dot Sans", system-ui, sans-serif;
@@ -96,9 +100,9 @@ html[data-theme="light"] {
   --bg-topbar: var(--light-sand);
   --border: var(--light-sand-s2);
   --border-strong: var(--light-sand-s3);
-  --active-step: var(--rev-green-t1);
-  --grid-main: var(--rev-green-t3);
-  --grid-sub: var(--rev-green);
+  --active-step: var(--light-sand-s2);
+  --grid-main: #8da08d;
+  --grid-sub: #b8c4b8;
   --candidate: var(--rev-green-t4);
   --text: var(--dark-forest-t2);
   --text-secondary: var(--dark-forest-t3);
@@ -106,6 +110,9 @@ html[data-theme="light"] {
   --text-on-accent: var(--light-sand);
   --part-solid: var(--dark-forest-t3);
   --part-wire: var(--dark-forest);
+  --axis-x: #8b1a1a;
+  --axis-y: #1a5c1a;
+  --axis-z: #1a3a8a;
 }
 
 /* Contrast verification WCAG AA

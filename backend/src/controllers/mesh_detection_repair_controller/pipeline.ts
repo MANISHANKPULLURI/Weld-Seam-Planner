@@ -6,11 +6,9 @@ import { normalizeNormalOrientations } from "./normals.ts";
 import { packCleanBinarySTL } from "./write.ts";
 
 
-export function runValidationPipeline(buffer: ArrayBuffer) {
-
+export function runValidationPipeline(buffer: ArrayBuffer, tolerance = 1e-4) {
   const positions = parseIncomingMeshBuffer(buffer);
-
-  const welded = weldVertexCoordinates(positions);
+  const welded = weldVertexCoordinates(positions, tolerance);
 
   const diagnostics = computeAdjacencyDiagnostics(welded.indexArray);
 
@@ -35,11 +33,9 @@ export function runValidationPipeline(buffer: ArrayBuffer) {
 }
 
 
-export function runRepairPipeline(buffer: ArrayBuffer) {
-
+export function runRepairPipeline(buffer: ArrayBuffer, tolerance = 1e-4) {
   const positions = parseIncomingMeshBuffer(buffer);
-
-  const welded = weldVertexCoordinates(positions);
+  const welded = weldVertexCoordinates(positions, tolerance);
 
   const diagnostics = computeAdjacencyDiagnostics(welded.indexArray);
 

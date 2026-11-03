@@ -3,6 +3,7 @@ import { Home } from "./ui/Home";
 import { AppShell } from "./ui/AppShell";
 import { PartStep } from "./ui/steps/PartStep";
 import { SeamsStep } from "./ui/steps/SeamsStep";
+import { ProjectCreation } from "./ui/components/ProjectCreation";
 import Viewport from "./Viewport";
 import { useStore } from "./state/store";
 
@@ -24,10 +25,11 @@ function useHash(): string {
 export default function App() {
   const hash = useHash();
   const step = useStore((s) => s.step);
+  const projectId = useStore((s) => s.projectId);
   if (hash === "#/") return <Home />;
   return (
     <AppShell viewport={<Viewport />}>
-      {step === "seams" ? <SeamsStep /> : <PartStep />}
+      {!projectId ? <ProjectCreation /> : step === "seams" ? <SeamsStep /> : <PartStep />}
     </AppShell>
   );
 }

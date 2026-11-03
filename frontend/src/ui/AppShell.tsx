@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Logo } from "./Logo";
 import { LocalOnlyChip } from "./components/LocalOnlyChip";
 import { useStore } from "../state/store";
@@ -22,9 +22,13 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
   const checked = phase === "checked";
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState(() => (typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") || "dark" : "dark"));
-  if (typeof document !== "undefined" && !document.documentElement.getAttribute("data-theme")) {
-    document.documentElement.setAttribute("data-theme", "dark");
-  }
+  const projectId = useStore((s) => s.projectId);
+  const clearProject = useStore((s) => s.clearProject);
+  useEffect(() => {
+    if (typeof document !== "undefined" && !document.documentElement.getAttribute("data-theme")) {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  }, []);
 
   return (
     <div className={`planner-root${collapsed ? " planner-root-panel-collapsed" : ""}`}>
@@ -43,6 +47,11 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
             {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
         </div>
+        {projectId && (
+          <button type="button" className="planner-collapse-btn" onClick={() => { clearProject(); useStore.getState().loadAnother(); }} aria-label="New project" title="Start new project">
+            New project
+          </button>
+        )}
         {fileName && <span className="planner-filechip" title={fileName}>{fileName}</span>}
         <LocalOnlyChip />
       </header>

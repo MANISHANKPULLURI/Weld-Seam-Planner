@@ -109,47 +109,39 @@ export function computeBounds(uniqueVertices: Float32Array) {
 
 
 export function estimateBodies(indexArray: Int32Array): number {
-
   const n = indexArray.length / 3;
-
   if (n === 0) return 0;
-
-  const parent = Array.from({ length: n }, (_, i) => i);
-
+  const parent = new Int32Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
   function find(x: number): number {
     while (parent[x] !== x) {
-      parent[x] = parent[parent[x]];
-      x = parent[x];
+      const p = parent[x]!;
+      const gp = parent[p]!;
+      if (p !== gp) parent[x] = gp;
+      x = parent[x]!;
     }
     return x;
   }
-
   function union(a: number, b: number) {
     a = find(a);
     b = find(b);
     if (a !== b) parent[a] = b;
   }
-
-  const vmap = new Map<number, number[]>();
-
+  const vmap = new Map<number, number>();
+  const vFirst = new Map<number, number>();
   for (let i = 0; i < n; i++) {
     for (let k = 0; k < 3; k++) {
-
-      const v = indexArray[i * 3 + k];
-      const arr = vmap.get(v);
-
-      if (arr) {
-        for (const j of arr) union(i, j);
-        arr.push(i);
+      const v = indexArray[i * 3 + k]!;
+      const first = vFirst.get(v);
+      if (first !== undefined) {
+        union(i, first);
       } else {
-        vmap.set(v, [i]);
+        vFirst.set(v, i);
       }
+      vmap.set(v, (vmap.get(v) || 0) + 1);
     }
   }
-
   const roots = new Set<number>();
-
   for (let i = 0; i < n; i++) roots.add(find(i));
-
   return roots.size;
 }
