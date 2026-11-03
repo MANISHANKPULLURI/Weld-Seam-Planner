@@ -55,11 +55,12 @@ export function computeFitDistance(
 }
 
 export function computeDisplayScale(rawMax: number): number {
-  if (!isFinite(rawMax) || rawMax <= 0) return 1;
-  if (rawMax < 0.1) return 1;
-  if (rawMax >= 20 && rawMax <= 500) return 1;
   const target = 120;
-  return Math.max(0.001, Math.min(1000, target / rawMax));
+  if (rawMax < 0.1 || rawMax > 500 || rawMax < 20) {
+    if (rawMax < 0.1) return 1;
+    return Math.max(0.001, Math.min(1000, target / rawMax));
+  }
+  return 1;
 }
 
 export function displayToOriginal(pt: THREE.Vector3, scale: number): THREE.Vector3 {

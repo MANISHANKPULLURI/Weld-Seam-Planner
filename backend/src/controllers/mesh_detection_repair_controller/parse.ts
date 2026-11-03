@@ -72,10 +72,13 @@ export function parseIncomingMeshBuffer(buffer: ArrayBuffer): Float32Array {
   }
 
   const text = new TextDecoder().decode(buffer);
-  const regex = /vertex\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/gi;
+  const regex = /vertex\s+(-?[\d.]+e?[-+]*\d*)\s+(-?[\d.]+e?[-+]*\d*)\s+(-?[\d.]+e?[-+]*\d*)/gi;
+
   const positionsArray: number[] = [];
   let match: RegExpExecArray | null;
+
   while ((match = regex.exec(text)) !== null) {
+
     const x = parseFloat(match[1]!);
     const y = parseFloat(match[2]!);
     const z = parseFloat(match[3]!);

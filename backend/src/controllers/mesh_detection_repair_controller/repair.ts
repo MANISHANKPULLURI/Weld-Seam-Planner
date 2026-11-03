@@ -1,20 +1,31 @@
 export function healMeshBoundaries(boundaryRegistry: Map<number, number[]>, currentIndexArray: Int32Array): Int32Array {
+
   const repairedIndices = Array.from(currentIndexArray);
+
   const globalVisitedNodes = new Set<number>();
+
   for (const [startNode] of boundaryRegistry) {
+
     if (globalVisitedNodes.has(startNode)) continue;
+
     const dynamicLoopPath: number[] = [];
-    const visitedInPath = new Set<number>();
+
     let current: number | undefined = startNode;
+
     let isLoopClosed = false;
+
     while (current !== undefined && boundaryRegistry.has(current) && !globalVisitedNodes.has(current)) {
+
       dynamicLoopPath.push(current);
-      visitedInPath.add(current);
       globalVisitedNodes.add(current);
+
       const connectedOptions: number[] = boundaryRegistry.get(current) || [];
+
       let nextTarget: number | null = null;
+
       for (const opt of connectedOptions as number[]) {
-        if (!visitedInPath.has(opt)) {
+
+        if (!dynamicLoopPath.includes(opt)) {
           nextTarget = opt;
           break;
         }
