@@ -1,0 +1,42 @@
+.assembly-tree { display: flex; flex-direction: column; gap: 8px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.assembly-tree-header { display: flex; align-items: center; justify-content: space-between; }
+.assembly-tree-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); }
+.assembly-tree-count { font-size: 11px; color: var(--text-muted); }
+.assembly-tree-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
+.assembly-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel); cursor: pointer; }
+.assembly-row:hover { border-color: var(--border-strong); }
+.assembly-selected { border-color: var(--bright-discovery); background: rgba(239,127,1,0.08); }
+.assembly-locked { opacity: 0.85; }
+.assembly-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.assembly-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assembly-meta { font-size: 11px; color: var(--text-muted); }
+.assembly-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.icon-btn { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-raised); color: var(--text-secondary); font-size: 12px; display: grid; place-items: center; cursor: pointer; }
+.icon-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.icon-btn-active { color: var(--accent); border-color: var(--accent); background: rgba(239,127,1,0.12); }
+.icon-btn-off { opacity: 0.5; }
+.icon-btn-danger { color: var(--danger); }
+.assembly-rename-input { font-size: 13px; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-raised); color: var(--text); width: 100%; }
+.assembly-confirm { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-secondary); }
+.btn-danger-sm { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--danger); background: var(--danger); color: white; font-size: 11px; cursor: pointer; }
+.btn-ghost-sm { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-raised); color: var(--text-secondary); font-size: 11px; cursor: pointer; }
+.component-properties { display: flex; flex-direction: column; gap: 12px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
+.prop-header { display: flex; flex-direction: column; gap: 4px; }
+.prop-name-input { font-size: 15px; font-weight: 600; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel); color: var(--text); }
+.prop-filename { font-size: 11px; color: var(--text-muted); }
+.prop-group { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.prop-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+.prop-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.prop-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.prop-grid { display: grid; grid-template-columns: 18px 1fr 1fr; gap: 6px; align-items: center; }
+.prop-axis-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-align: center; }
+.prop-input, .prop-select { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); color: var(--text); font-size: 12px; min-width: 0; }
+.prop-check { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.prop-hint { font-size: 11px; color: var(--text-muted); }
+.prop-meta { font-size: 11px; color: var(--text-muted); }
+.assembly-toolbar { display: flex; flex-direction: column; gap: 8px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+.assembly-toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.assembly-toolbar-meta { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.assembly-exploded-label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.assembly-exploded-label input { width: 120px; }
+.assembly-bounds, .assembly-measure { font-size: 11px; color: var(--text-secondary); background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; }

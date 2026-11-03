@@ -183,6 +183,7 @@
   line-height: 1;
 }
 .gizmo-btn:hover { background: var(--rev-green-t1); color: var(--text); }
+html[data-theme="light"] .gizmo-btn:hover { background: var(--light-sand-s2); color: var(--text); }
 
 /* avoid overlap between gizmo and size chip */
 .view-controls-bottom-left.view-chip {

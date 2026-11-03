@@ -1,6 +1,6 @@
 import { useStore } from "../../state/store";
 import type { ViewId } from "../../state/store";
-import { GridIcon, RefreshIcon, CubeIcon, FitIcon, TriangleIcon, LayersIcon } from "../icons";
+import { GridIcon, RefreshIcon, CubeIcon, FitIcon, LayersIcon } from "../icons";
 
 export function ViewControls({ controller }: { controller: import("../../viewer/SceneController").SceneController | null }) {
   const projection = useStore((s) => s.projection);
@@ -14,7 +14,7 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
     setProjection(p);
     controller?.setProjection(p);
   }
-  function mode(m: "solid" | "wireframe" | "triangles") {
+  function mode(m: "solid" | "wireframe") {
     setViewMode(m);
     controller?.setViewMode(m);
   }
@@ -40,7 +40,6 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
         <div className="view-segmented" role="group" aria-label="Rendering mode">
           <button type="button" aria-pressed={viewMode === "solid"} onClick={() => mode("solid")} title="Solid — smooth shaded"><LayersIcon size={12} /> Solid</button>
           <button type="button" aria-pressed={viewMode === "wireframe"} onClick={() => mode("wireframe")} title="Wireframe — mesh edges"><GridIcon size={12} /> Wireframe</button>
-          <button type="button" aria-pressed={viewMode === "triangles"} onClick={() => mode("triangles")} title="Triangle visualization — display tessellation"><TriangleIcon size={12} /> Triangles</button>
         </div>
         <button type="button" className="view-btn" onClick={fit} aria-label="Fit model to view" title="Fit model (F)">
           <FitIcon size={12} /> Fit Model
