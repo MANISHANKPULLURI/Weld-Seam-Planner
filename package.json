@@ -1,6 +1,6 @@
 {
   "private": true,
-  "workspaces": ["backend", "frontend", "shared"],
+  "workspaces": ["backend", "frontend"],
   "scripts": {
     "check": "bun run --filter '*' check",
     "test": "bun run --filter '*' test",

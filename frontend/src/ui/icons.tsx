@@ -100,3 +100,25 @@ export function ChevronRightIcon({ size = 14 }: { size?: number }) {
     </svg>
   );
 }
+export function FitIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden="true">
+      <path d="M3 8V3H8" /><path d="M16 3H21V8" /><path d="M21 16V21H16" /><path d="M8 21H3V16" />
+    </svg>
+  );
+}
+export function TriangleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden="true">
+      <path d="M12 4L20 20H4L12 4Z" />
+      <path d="M12 4V20M4 20L20 20" />
+    </svg>
+  );
+}
+export function LayersIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden="true">
+      <path d="M12 3L3 9L12 15L21 9L12 3Z" /><path d="M3 15L12 21L21 15" />
+    </svg>
+  );
+}

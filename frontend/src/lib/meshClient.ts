@@ -4,6 +4,22 @@ const API_BASE = (import.meta as unknown as { env?: { VITE_API_URL?: string } })
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
+function createProgressTicker(gen: number, from: number, to: number): number {
+  let cur = from;
+  const id = setInterval(() => {
+    if (useStore.getState().generation !== gen) { clearInterval(id); return; }
+    cur = Math.min(to, cur + 2);
+    useStore.getState().setProgress(cur);
+  }, 500) as unknown as number;
+  return id;
+}
+
+function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, ms = 120000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 function toHealth(raw: {
   triangles: number;
   bodies: number;
@@ -20,15 +36,28 @@ function toHealth(raw: {
   };
 }
 
+async function safeJson(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return { error: `Request failed ${res.status}` };
+  try { return JSON.parse(text); } catch { return { error: text.slice(0,300) || `Invalid response ${res.status}` }; }
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 async function uploadChunkedFromFile(file: File, mode: "validate" | "repair", onProgress: (p: number) => void) {
 
-  const initRes = await fetch(`${API_BASE}/api/v1/mesh/upload/init`, {
+  const initRes = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/init`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fileName: file.name, fileSize: file.size }),
   });
 
-  const initDataFile = await initRes.json() as { uploadId?: string; error?: string };
+  const initDataFile = await safeJson(initRes) as { uploadId?: string; error?: string };
   if (!initRes.ok || !initDataFile.uploadId) throw new Error(initDataFile.error || "Upload init failed");
   const uploadIdFile = initDataFile.uploadId;
   const totalChunksFile = Math.ceil(file.size / CHUNK_SIZE);
@@ -38,9 +67,9 @@ async function uploadChunkedFromFile(file: File, mode: "validate" | "repair", on
     while (nextFile < totalChunksFile) {
       const idx = nextFile++;
       const chunk = file.slice(idx * CHUNK_SIZE, (idx + 1) * CHUNK_SIZE);
-      const res = await fetch(`${API_BASE}/api/v1/mesh/upload/${uploadIdFile}/chunk?index=${idx}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
+      const res = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/${uploadIdFile}/chunk?index=${idx}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: chunk });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Chunk upload failed" })) as { error?: string };
+        const err = await safeJson(res) as { error?: string };
         throw new Error(err.error || "Chunk upload failed");
       }
       uploadedFile++;
@@ -49,23 +78,24 @@ async function uploadChunkedFromFile(file: File, mode: "validate" | "repair", on
   }
   await Promise.all(Array.from({ length: Math.min(4, totalChunksFile) }, () => workerFile()));
   onProgress(90);
-  const finalResFile = await fetch(`${API_BASE}/api/v1/mesh/upload/${uploadIdFile}/complete?mode=${mode}`, { method: "POST" });
-  const dataFile = await finalResFile.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+  const finalResFile = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/${uploadIdFile}/complete?mode=${mode}`, { method: "POST" });
+  const dataFile = await safeJson(finalResFile) as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] }; binaryBase64?: string };
   if (!finalResFile.ok) throw new Error((dataFile as { error?: string }).error || `${mode} failed`);
+  if (!dataFile.health || !dataFile.mesh) throw new Error((dataFile as { error?: string }).error || "Invalid response from server");
   onProgress(100);
-  return dataFile as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+  return dataFile as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] }; binaryBase64?: string };
 }
 
 
 async function uploadChunked(buffer: ArrayBuffer, fileName: string, mode: "validate" | "repair", onProgress: (p: number) => void) {
 
-  const initRes = await fetch(`${API_BASE}/api/v1/mesh/upload/init`, {
+  const initRes = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/init`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fileName, fileSize: buffer.byteLength }),
   });
 
-  const initData = await initRes.json() as { uploadId?: string; error?: string };
+  const initData = await safeJson(initRes) as { uploadId?: string; error?: string };
 
   if (!initRes.ok || !initData.uploadId) {
     throw new Error(initData.error || "Upload init failed");
@@ -89,14 +119,14 @@ async function uploadChunked(buffer: ArrayBuffer, fileName: string, mode: "valid
 
       const item = chunks[next++]!;
 
-      const res = await fetch(`${API_BASE}/api/v1/mesh/upload/${uploadId}/chunk?index=${item.index}`, {
+      const res = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/${uploadId}/chunk?index=${item.index}`, {
         method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
         body: item.chunk,
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Chunk upload failed" })) as { error?: string };
+        const err = await safeJson(res) as { error?: string };
         throw new Error(err.error || "Chunk upload failed");
       }
 
@@ -110,19 +140,20 @@ async function uploadChunked(buffer: ArrayBuffer, fileName: string, mode: "valid
 
   onProgress(90);
 
-  const finalRes = await fetch(`${API_BASE}/api/v1/mesh/upload/${uploadId}/complete?mode=${mode}`, {
+  const finalRes = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/${uploadId}/complete?mode=${mode}`, {
     method: "POST",
   });
 
-  const data = await finalRes.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+  const data = await safeJson(finalRes) as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] }; binaryBase64?: string };
 
   if (!finalRes.ok) {
     throw new Error(data.error || `${mode} failed`);
   }
+  if (!data.health || !data.mesh) throw new Error(data.error || "Invalid response from server");
 
   onProgress(100);
 
-  return data as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+  return data as { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] }; binaryBase64?: string };
 }
 
 export async function analyseFileFromFile(file: File) {
@@ -141,17 +172,18 @@ export async function analyseFileFromFile(file: File) {
     if (useStore.getState().generation !== gen) return;
     useStore.getState().setProgress(p);
   };
+  let ticker: number | null = null;
 
   try {
-
+    ticker = createProgressTicker(gen, 12, 84);
     const fileSize = file.size;
-    const initRes = await fetch(`${API_BASE}/api/v1/mesh/upload/init`, {
+    const initRes = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/init`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fileName: file.name, fileSize }),
     });
 
-    const initData = await initRes.json() as { uploadId?: string; error?: string };
+    const initData = await safeJson(initRes) as { uploadId?: string; error?: string };
 
     if (!initRes.ok || !initData.uploadId) throw new Error(initData.error || "Upload init failed");
 
@@ -171,14 +203,14 @@ export async function analyseFileFromFile(file: File) {
         const end = Math.min(start + CHUNK_SIZE, fileSize);
         const chunk = file.slice(start, end);
 
-        const res = await fetch(`${API_BASE}/api/v1/mesh/upload/${uploadId}/chunk?index=${idx}`, {
+        const res = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/${uploadId}/chunk?index=${idx}`, {
           method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
           body: chunk,
         });
 
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: "Chunk upload failed" })) as { error?: string };
+          const err = await safeJson(res) as { error?: string };
           throw new Error(err.error || "Chunk upload failed");
         }
 
@@ -193,10 +225,11 @@ export async function analyseFileFromFile(file: File) {
 
     onProgress(90);
 
-    const finalRes = await fetch(`${API_BASE}/api/v1/mesh/upload/${uploadId}/complete?mode=validate`, { method: "POST" });
-    const data = await finalRes.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+    const finalRes = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/upload/${uploadId}/complete?mode=validate`, { method: "POST" });
+    const data = await safeJson(finalRes) as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
 
     if (!finalRes.ok) throw new Error((data as { error?: string }).error || "Validation failed");
+    if (!data.health || !data.mesh) throw new Error((data as { error?: string }).error || "Invalid response from server");
 
     if (useStore.getState().generation !== gen) return;
 
@@ -205,14 +238,16 @@ export async function analyseFileFromFile(file: File) {
     const positions = new Float32Array(raw.mesh.positions);
     const indices = new Uint32Array(raw.mesh.indices);
 
+    if (ticker) clearInterval(ticker);
     for (const s of stages) useStore.getState().setStage(s, "done");
     useStore.getState().setProgress(100);
     useStore.getState().finishChecked(health, { positions, indices, health }, false, gen);
 
   } catch (err) {
-
+    if (ticker) clearInterval(ticker);
     if (useStore.getState().generation !== gen) return;
 
+    if (err instanceof DOMException && err.name === "AbortError") { if (useStore.getState().generation !== gen) return; useStore.setState({ phase: "error", error: "Upload timed out. Please try again.", stages: { read: "error", weld: "pending", topology: "pending", measure: "pending" } }); return; }
     const message = err instanceof Error && err.message === "stale" ? "stale" : err instanceof Error ? err.message : "This file doesn't look like a valid STL.";
     if (message === "stale") return;
     useStore.setState({ phase: "error", error: message, stages: { read: "error", weld: "pending", topology: "pending", measure: "pending" } });
@@ -238,9 +273,10 @@ export async function analyseFile(buffer: ArrayBuffer, fileName: string) {
     if (useStore.getState().generation !== gen) return;
     useStore.getState().setProgress(p);
   };
+  let ticker2: number | null = null;
 
   try {
-
+    ticker2 = createProgressTicker(gen, 18, 88);
     let raw: { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
 
     if (useChunked) {
@@ -251,17 +287,18 @@ export async function analyseFile(buffer: ArrayBuffer, fileName: string) {
 
       onProgress(30);
 
-      const res = await fetch(`${API_BASE}/api/v1/mesh/validate`, {
+      const res = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
         body: buffer,
       });
 
-      const data = await res.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+      const data = await safeJson(res) as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
 
       if (!res.ok) {
         throw new Error(data.error || "Validation failed");
       }
+      if (!data.health || !data.mesh) throw new Error(data.error || "Invalid response from server");
 
       raw = data as typeof raw;
       onProgress(90);
@@ -273,13 +310,16 @@ export async function analyseFile(buffer: ArrayBuffer, fileName: string) {
     const positions = new Float32Array(raw.mesh.positions);
     const indices = new Uint32Array(raw.mesh.indices);
 
+    if (ticker2) clearInterval(ticker2);
     for (const s of stages) useStore.getState().setStage(s, "done");
     useStore.getState().setProgress(100);
     useStore.getState().finishChecked(health, { positions, indices, health }, false, gen);
 
   } catch (err) {
-
+    if (ticker2) clearInterval(ticker2);
     if (useStore.getState().generation !== gen) return;
+    if (err instanceof DOMException && err.name === "AbortError") { useStore.setState({ phase: "error", error: "Upload timed out. Please try again.", stages: { read: "error", weld: "pending", topology: "pending", measure: "pending" } }); return; }
+
     if (err instanceof Error && err.message === "stale") return;
 
     const message = err instanceof Error ? err.message : "This file doesn't look like a valid STL.";
@@ -296,19 +336,24 @@ export async function repairFile() {
 
   if (file) {
     useStore.setState({ phase: "repairing", progress: 5 });
+    const tickerR1 = createProgressTicker(gen, 10, 92);
     try {
       const raw = await uploadChunkedFromFile(file, "repair", (p) => {
         if (useStore.getState().generation !== gen) return;
         useStore.getState().setProgress(p);
       });
-      if (useStore.getState().generation !== gen) return;
+      if (useStore.getState().generation !== gen) { clearInterval(tickerR1); return; }
       const health = toHealth(raw.health);
       const positions = new Float32Array(raw.mesh.positions);
       const indices = new Uint32Array(raw.mesh.indices);
+      const binary = raw.binaryBase64 ? base64ToArrayBuffer(raw.binaryBase64) : null;
+      clearInterval(tickerR1);
       useStore.getState().setProgress(100);
-      useStore.getState().finishChecked(health, { positions, indices, health }, true, gen);
+      useStore.getState().finishChecked(health, { positions, indices, health }, true, gen, binary);
     } catch (err) {
+      clearInterval(tickerR1);
       if (useStore.getState().generation !== gen) return;
+      if (err instanceof DOMException && err.name === "AbortError") { useStore.setState({ phase: "error", error: "Repair timed out. Please try again." }); return; }
       if (err instanceof Error && err.message === "stale") return;
       const message = err instanceof Error ? err.message : "Repair failed";
       useStore.setState({ phase: "error", error: message });
@@ -319,6 +364,7 @@ export async function repairFile() {
   if (!buf) return;
 
   useStore.setState({ phase: "repairing", progress: 5 });
+  const tickerR2 = createProgressTicker(gen, 10, 92);
 
   const useChunked = buf.byteLength > CHUNK_SIZE;
 
@@ -329,7 +375,7 @@ export async function repairFile() {
 
   try {
 
-    let raw: { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] } };
+    let raw: { health: { triangles: number; bodies: number; openEdges: number; bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } } }; mesh: { positions: number[]; indices: number[] }; binaryBase64?: string };
 
     if (useChunked) {
 
@@ -339,17 +385,18 @@ export async function repairFile() {
 
       onProgress(30);
 
-      const res = await fetch(`${API_BASE}/api/v1/mesh/repair`, {
+      const res = await fetchWithTimeout(`${API_BASE}/api/v1/mesh/repair`, {
         method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
         body: buf,
       });
 
-      const data = await res.json() as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] } };
+      const data = await safeJson(res) as { health?: unknown; error?: string; mesh?: { positions: number[]; indices: number[] }; binaryBase64?: string };
 
       if (!res.ok) {
         throw new Error(data.error || "Repair failed");
       }
+      if (!data.health || !data.mesh) throw new Error(data.error || "Invalid response from server");
 
       raw = data as typeof raw;
       onProgress(90);
@@ -360,13 +407,16 @@ export async function repairFile() {
     const health = toHealth(raw.health);
     const positions = new Float32Array(raw.mesh.positions);
     const indices = new Uint32Array(raw.mesh.indices);
+    const binary = raw.binaryBase64 ? base64ToArrayBuffer(raw.binaryBase64) : null;
 
+    clearInterval(tickerR2);
     useStore.getState().setProgress(100);
-    useStore.getState().finishChecked(health, { positions, indices, health }, true, gen);
+    useStore.getState().finishChecked(health, { positions, indices, health }, true, gen, binary);
 
   } catch (err) {
-
+    clearInterval(tickerR2);
     if (useStore.getState().generation !== gen) return;
+    if (err instanceof DOMException && err.name === "AbortError") { useStore.setState({ phase: "error", error: "Repair timed out. Please try again." }); return; }
     if (err instanceof Error && err.message === "stale") return;
 
     const message = err instanceof Error ? err.message : "Repair failed";

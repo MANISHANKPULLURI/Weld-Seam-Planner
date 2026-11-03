@@ -24,7 +24,7 @@ describe("STL validation contract - future backend endpoint", () => {
   });
 
   test("MAX_TRIANGLES constant is defined and reasonable", async () => {
-    const { MAX_TRIANGLES } = await import("../src/features/mesh/parse.ts");
+    const { MAX_TRIANGLES } = await import("../src/controllers/mesh_detection_repair_controller/parse.ts");
     expect(MAX_TRIANGLES).toBe(15_000_000);
     expect(MAX_TRIANGLES).toBeGreaterThan(100_000);
   });
