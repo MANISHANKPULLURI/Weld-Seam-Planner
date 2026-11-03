@@ -15,14 +15,6 @@ export default function Viewport() {
   const tool = useStore((s) => s.tool);
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
-  const components = useStore((s) => s.components);
-  const inputMode = useStore((s) => s.inputMode);
-  const selectedId = useStore((s) => s.selectedComponentId);
-  const isolatedId = useStore((s) => s.isolatedComponentId);
-  const explodedFactor = useStore((s) => s.explodedFactor);
-  const transformMode = useStore((s) => s.transformMode);
-  const selectComponent = useStore((s) => s.selectComponent);
-  const setComponentTransform = useStore((s) => s.setComponentTransform);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -30,13 +22,9 @@ export default function Viewport() {
     const c = new SceneController(host);
     ctrlRef.current = c;
     setCtrl(c);
-    (host as unknown as { __sceneController?: unknown }).__sceneController = c;
-    (window as unknown as { __sceneController?: unknown }).__sceneController = c;
     c.onViewChangeCallback((id) => setView(id));
-    c.onSelect((id) => selectComponent(id));
-    c.onTransform((id, t) => setComponentTransform(id, t));
-    return () => { c.dispose(); ctrlRef.current = null; (window as unknown as { __sceneController?: unknown }).__sceneController = undefined; };
-  }, [setView, selectComponent, setComponentTransform]);
+    return () => { c.dispose(); ctrlRef.current = null; };
+  }, [setView]);
 
   useEffect(() => {
     if (hostRef.current) hostRef.current.dataset.tool = tool;
@@ -45,28 +33,9 @@ export default function Viewport() {
   useEffect(() => {
     const c = ctrlRef.current;
     if (!c) return;
-    if (inputMode === "multiple" && components.length > 0) {
-      const validated = components.filter((co) => co.status === "validated" && co.positions.length > 0);
-      if (validated.length > 0) {
-        c.setComponents(validated.map((co) => ({ id: co.id, positions: co.positions, indices: co.indices, transform: co.transform, visible: co.visible, locked: co.locked, bounds: co.bounds })));
-        c.fadeIn();
-      } else c.clearMesh();
-    } else if (mesh) {
-      c.setMesh(mesh.positions, mesh.indices);
-      c.fadeIn();
-    } else c.clearMesh();
-  }, [mesh, components, inputMode]);
-
-  useEffect(() => { const c = ctrlRef.current; if (!c) return; c.setSelection(selectedId); }, [selectedId]);
-  useEffect(() => { const c = ctrlRef.current; if (!c) return; c.setIsolated(isolatedId); }, [isolatedId]);
-  useEffect(() => { const c = ctrlRef.current; if (!c) return; c.setExplodedFactor(explodedFactor); }, [explodedFactor]);
-  useEffect(() => { const c = ctrlRef.current; if (!c) return; c.setTransformMode(transformMode); }, [transformMode]);
-  useEffect(() => {
-    const c = ctrlRef.current;
-    if (!c || inputMode !== "multiple") return;
-    for (const comp of components) c.updateComponentTransform(comp.id, comp.transform);
-    for (const comp of components) c.setVisibility(comp.id, comp.visible);
-  }, [components, inputMode]);
+    if (mesh) { c.setMesh(mesh.positions, mesh.indices); c.fadeIn(); }
+    else c.clearMesh();
+  }, [mesh]);
 
   useEffect(() => {
     const c = ctrlRef.current;
@@ -85,15 +54,7 @@ export default function Viewport() {
   useEffect(() => { if (ctrl) ctrl.setProjection(projection); }, [ctrl, projection]);
   useEffect(() => { if (ctrl) ctrl.setViewMode(viewMode); }, [ctrl, viewMode]);
 
-  const aggSize = (() => {
-    if (inputMode !== "multiple" || components.length === 0) return null;
-    const vals = components.filter((c) => c.status === "validated" && c.bounds);
-    if (vals.length === 0) return null;
-    let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-    for (const c of vals) { minX = Math.min(minX, c.bounds.min.x); minY = Math.min(minY, c.bounds.min.y); minZ = Math.min(minZ, c.bounds.min.z); maxX = Math.max(maxX, c.bounds.max.x); maxY = Math.max(maxY, c.bounds.max.y); maxZ = Math.max(maxZ, c.bounds.max.z); }
-    return { x: maxX - minX, y: maxY - minY, z: maxZ - minZ };
-  })();
-  const size = inputMode === "multiple" ? aggSize : health?.bounds.size;
+  const size = health?.bounds.size;
 
   function handleGizmoView(id: ViewId) {
     setView(id);

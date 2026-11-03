@@ -1,6 +1,6 @@
 import { useStore } from "../state/store";
 
-const API_BASE = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || "";
+const API_BASE = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || "http://localhost:8000";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
@@ -36,10 +36,10 @@ function toHealth(raw: {
   };
 }
 
-async function safeJson(res: Response): Promise<unknown> {
+async function safeJson(res: Response): Promise<any> {
   const text = await res.text();
-  if (!text) return { error: `Request failed ${res.status}` } as const;
-  try { return JSON.parse(text) as unknown; } catch { return { error: text.slice(0,300) || `Invalid response ${res.status}` } as const; }
+  if (!text) return { error: `Request failed ${res.status}` };
+  try { return JSON.parse(text); } catch { return { error: text.slice(0,300) || `Invalid response ${res.status}` }; }
 }
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
