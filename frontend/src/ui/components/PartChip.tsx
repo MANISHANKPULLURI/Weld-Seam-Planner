@@ -16,7 +16,7 @@ export function PartChip() {
       <span className="part-chip-name">{part.fileName}</span>
       {ready && <span className="part-chip-meta numeric">{formatCount(health.triangles)} triangles</span>}
       {ready && (frame.confirmed
-        ? <span className="part-chip-meta">mm, Z up</span>
+        ? <span className="part-chip-meta">{frame.units}, Z up</span>
         : <span className="part-chip-meta part-chip-warn">Units not confirmed</span>)}
     </span>
   );

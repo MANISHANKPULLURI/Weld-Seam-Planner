@@ -141,8 +141,31 @@ export function EdgeIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function EyeIcon({ size = 14, off = false }: { size?: number; off?: boolean }) {
+export function SunIcon({ size = 16 }: { size?: number }) {
   return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19" />
+    </svg>
+  );
+}
+export function MoonIcon({ size = 16 }: { size?: number }) {  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 14.5C18.6 16.6 16 18 13 18c-4.4 0-8-3.6-8-8 0-3 .1-5.6 2.2-7C4.8 3.6 3.5 6.6 3.5 10c0 5 4 9 9 9 2.4 0 5.4-1.3 7.5-4.5Z" />
+      <path d="M17 4l.6 1.7L19.3 6.3l-1.7.6L17 8.6l-.6-1.7-1.7-.6 1.7-.6L17 4Z" />
+    </svg>
+  );
+}
+export function SaveIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 3h11l3 3v15H5V3Z" />
+      <path d="M8 3v5h7V3" />
+      <rect x="8" y="13" width="8" height="5" rx="1" />
+    </svg>
+  );
+}
+export function EyeIcon({ size = 14, off = false }: { size?: number; off?: boolean }) {  return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M1.5 8C3 5 5.3 3.5 8 3.5S13 5 14.5 8C13 11 10.7 12.5 8 12.5S3 11 1.5 8Z" stroke="currentColor" strokeWidth={1.4} />
       <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth={1.4} />

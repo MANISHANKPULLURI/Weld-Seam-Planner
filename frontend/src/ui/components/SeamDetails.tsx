@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { JOINT_HELP } from "./SeamList";
 import { SplitPanel } from "./SplitPanel";
 import { focusForSeam } from "../../lib/focus";
@@ -6,7 +6,7 @@ import { mergeTargets, seamLengthMm, useStore } from "../../state/store";
 
 const ACTION_HELP = {
   reverse: "Reverse: weld this seam the other way. The start dot and end arrow swap.",
-  split: "Split: really cuts this seam into two separate seams (two rows in the list, a dot at the joint), each with its own settings later. Use it to skip a hole or weld halves differently.",
+  split: "Split: cuts this seam into two separate seams (two rows in the list), each with its own settings later. Use it to skip a hole or weld halves differently.",
   merge: "Merge: join with a seam that touches one of its ends, so it is welded in one go.",
   delete: "Delete: remove this seam. Detection will not suggest it again.",
 } as const;
@@ -21,17 +21,13 @@ export function SeamDetails() {
   const [help, setHelp] = useState<keyof typeof ACTION_HELP | null>(null);
   const { acceptSeams, rejectSeams, renameSeam, reverseSeam, deleteSeam, setPendingAction, selectSeam } = useStore.getState();
 
-  const ref = useRef<HTMLElement>(null);
-  // Selecting from the list or the part brings this card into view, with its edit buttons.
-  useEffect(() => { ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [seam?.id]);
-
   if (!seam) return null;
 
   const candidate = seam.status === "candidate";
   const targets = mergeTargets(seams, seam.id);
 
   return (
-    <section ref={ref} className="result-card seam-details" aria-label="Selected seam">
+    <section aria-label="Selected seam" className="result-card seam-details">
       <header className="result-header">
         {candidate
           ? <span className="result-title">Candidate</span>

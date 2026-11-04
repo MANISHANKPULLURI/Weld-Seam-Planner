@@ -17,13 +17,14 @@ function SeamRow({ seam }: { seam: Seam }) {
   const units = useStore((s) => s.frame.units);
   const selected = useStore((s) => s.selectedSeamId === seam.id);
   const selectSeam = useStore((s) => s.selectSeam);
+  const setHoverSeam = useStore((s) => s.setHoverSeam);
   const acceptSeams = useStore((s) => s.acceptSeams);
   const rejectSeams = useStore((s) => s.rejectSeams);
   const candidate = seam.status === "candidate";
 
   return (
-    <li className={`seam-row${selected ? " seam-row-selected" : ""}`}>
-      <button type="button" className="seam-row-main" onClick={() => selectSeam(selected ? null : seam.id)} aria-pressed={selected}>
+    <li className={`seam-row${selected ? " seam-row-selected" : ""}`} onMouseEnter={() => setHoverSeam(seam.id)} onMouseLeave={() => setHoverSeam(null)} onFocus={() => setHoverSeam(seam.id)} onBlur={() => setHoverSeam(null)}>
+      <button type="button" className="seam-row-main" onClick={() => selectSeam(selected ? null : seam.id)} aria-pressed={selected} aria-label={`${candidate ? "Candidate" : "Seam"} ${candidate ? JOINT_LABEL[seam.jointType] : seam.name}, ${seamLengthMm(seam, units).toFixed(1)} millimetres, ${candidate ? seam.reason : ""}`}>
         <span className={`seam-swatch${candidate ? " seam-swatch-candidate" : ""}`} style={candidate ? undefined : { background: seamColor(seam) }} aria-hidden="true" />
         <span className="seam-row-name" title={JOINT_HELP[seam.jointType]}>{candidate ? JOINT_LABEL[seam.jointType] : seam.name}</span>
         <span className="seam-row-meta">{candidate ? seam.reason : MANUAL[seam.source] ?? JOINT_LABEL[seam.jointType]}</span>
@@ -31,8 +32,8 @@ function SeamRow({ seam }: { seam: Seam }) {
       </button>
       {candidate && (
         <span className="seam-row-actions">
-          <button type="button" className="icon-btn icon-btn-ok" onClick={() => acceptSeams([seam.id])} aria-label="Accept seam" title="Accept"><CheckIcon size={12} /></button>
-          <button type="button" className="icon-btn" onClick={() => rejectSeams([seam.id])} aria-label="Reject seam" title="Reject"><XIcon size={12} /></button>
+          <button type="button" className="icon-btn icon-btn-ok" onClick={() => acceptSeams([seam.id])} aria-label={`Accept ${JOINT_LABEL[seam.jointType]} ${seamLengthMm(seam, units).toFixed(1)} millimetres, ${seam.reason}`} title="Accept (A)"><CheckIcon size={14} /></button>
+          <button type="button" className="icon-btn" onClick={() => rejectSeams([seam.id])} aria-label={`Reject ${JOINT_LABEL[seam.jointType]} ${seamLengthMm(seam, units).toFixed(1)} millimetres, ${seam.reason}`} title="Reject"><XIcon size={14} /></button>
         </span>
       )}
     </li>
@@ -62,8 +63,8 @@ export function SeamList() {
           <header className="seam-section-header">
             <span className="section-label">Candidates <span className="numeric">{candidates.length}{candidates.length !== allCandidates.length ? ` of ${allCandidates.length}` : ""}</span></span>
             <span className="seam-section-actions">
-              <button type="button" className="btn-link" onClick={() => acceptSeams(candidates.map((c) => c.id))} disabled={candidates.length === 0} title="Accept every candidate shown">Accept shown</button>
-              <button type="button" className="btn-link" onClick={() => rejectSeams(candidates.map((c) => c.id))} disabled={candidates.length === 0} title="Reject every candidate shown">Reject shown</button>
+              <button type="button" className="btn-link" onClick={() => { if (candidates.length > 5 && !window.confirm(`Accept ${candidates.length} candidates? You can undo.`)) return; acceptSeams(candidates.map((c) => c.id)); }} disabled={candidates.length === 0} title="Accept every candidate shown (undoable)">Accept shown</button>
+              <button type="button" className="btn-link" onClick={() => { if (candidates.length > 5 && !window.confirm(`Reject ${candidates.length} candidates? You can undo.`)) return; rejectSeams(candidates.map((c) => c.id)); }} disabled={candidates.length === 0} title="Reject every candidate shown (undoable)">Reject shown</button>
             </span>
           </header>
           <div className="seam-filter" role="group" aria-label="Filter candidates">

@@ -15,11 +15,11 @@ export function SeamsStep() {
   if (reviewing) return <div className="seams-stack"><CandidateReview onClose={() => setReviewing(false)} /></div>;
   return (
     <div className="seams-stack">
-      <SeamDetails />
       <SeamGuide />
       <DetectCard />
       <ToolPalette />
       <SeamList />
+      <SeamDetails />
       <BodiesCard />
       <StepNav note={kept ? `${kept} seam${kept === 1 ? "" : "s"} kept. Next: give them weld parameters.` : "Keep at least one seam (✓) before setting parameters."} />
     </div>

@@ -16,9 +16,20 @@ export function SeamGuide() {
 
   const steps = [
     { done: detected, title: "Find seams", text: "Press Detect seams. Suggestions appear as dashed lines on the part." },
-    { done: detected && accepted > 0 && candidates === 0, title: "Keep the real welds", text: "In the list, ✓ keeps a suggestion, ✕ drops it. Kept ones turn solid, each in its own colour." },
-    { done: false, title: "Fix or add (optional)", text: "Click a seam to rename, reverse, split, merge or delete it. Use Pick edge or Draw for seams that were missed." },
+    { done: detected && accepted > 0, title: "Keep the real welds", text: "In the list, ✓ keeps a suggestion, ✕ drops it. Kept ones turn solid, each in its own colour." },
+    { done: accepted > 0, title: "Fix or add (optional)", text: "Click a seam to rename, reverse, split, merge or delete it. Use Pick edge or Draw for seams that were missed." },
   ];
+
+  // After the first detect the guide collapses to one line so Detect → Tools → List stay visible.
+  if (detected && !hidden) {
+    const doneCount = (detected ? 1 : 0) + (accepted > 0 ? 2 : 0);
+    return (
+      <section className="result-card seam-guide seam-guide-compact" aria-label="How this step works">
+        <span className="result-explainer">●●{doneCount >= 3 ? "●" : "○"} {accepted > 0 ? `${accepted} kept · ${candidates} to review.` : `${candidates} to review below.`} Pick edge or Draw adds missed ones.</span>
+        <button type="button" className="btn-link" onClick={() => { localStorage.setItem(KEY, "1"); setHidden(true); }}>Hide</button>
+      </section>
+    );
+  }
 
   return (
     <section className="result-card seam-guide" aria-label="How this step works">

@@ -7,6 +7,8 @@ import type { ViewId } from "./state/store";
 import { candidateVisible, inWorkArea, mergeTargets, orderedSeams, seamLengthMm, useStore } from "./state/store";
 import { ViewControls } from "./ui/components/ViewControls";
 import { WeldPlayer } from "./ui/components/WeldPlayer";
+import { PartChip } from "./ui/components/PartChip";
+import { SaveStatusLine } from "./ui/components/WorkControls";
 import { OrientationGizmo } from "./viewer/OrientationGizmo";
 import { formatSize } from "./domain/mesh/describe";
 
@@ -46,9 +48,10 @@ export default function Viewport() {
   const ctrlRef = useRef<SceneController | null>(null);
   const [ctrl, setCtrl] = useState<SceneController | null>(null);
   const [gridMm, setGridMm] = useState<number | null>(null);
-  const [hoverId, setHoverId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftPoint[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const [snapKind, setSnapKind] = useState<SurfacePoint["snapped"]>(null);
 
   const phase = useStore((s) => s.phase);
@@ -62,6 +65,8 @@ export default function Viewport() {
   const viewMode = useStore((s) => s.viewMode);
   const seams = useStore((s) => s.seams);
   const selectedSeamId = useStore((s) => s.selectedSeamId);
+  const hoverId = useStore((s) => s.hoverSeamId);
+  const setHoverId = useStore((s) => s.setHoverSeam);
   const featureChains = useStore((s) => s.featureChains);
   const xray = useStore((s) => s.xray);
   const section = useStore((s) => s.section);
@@ -168,6 +173,7 @@ export default function Viewport() {
   }, [cameraTarget]);
 
   const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
   const [undoVisible, setUndoVisible] = useState(false);
   useEffect(() => {
     if (!undo) { setUndoVisible(false); return; }
@@ -249,16 +255,47 @@ export default function Viewport() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (isTyping(e.target) || !seamTools) return;
+      if (isTyping(e.target)) return;
       const s = useStore.getState();
+      const k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === "z" && !e.shiftKey) { if (s.undo) { e.preventDefault(); s.undoLast(); } return; }
+      if ((e.metaKey || e.ctrlKey) && (k === "y" || (k === "z" && e.shiftKey))) { if (s.redo) { e.preventDefault(); s.redoLast(); } return; }
+      if ((e.metaKey || e.ctrlKey) && k === "a" && s.step === "seams") {
+        e.preventDefault();
+        const first = s.seams.find((x) => candidateVisible(x, s.candidateFilter, s.frame.units) && inWorkArea(x, s.workArea));
+        if (first) s.selectSeam(first.id);
+        return;
+      }
+      if (e.key === "?") { e.preventDefault(); setShowHelp((v) => !v); return; }
+      // Global camera/step shortcuts work in every tool, including Draw.
+      if (["1", "2", "3", "4", "5"].includes(e.key)) {
+        e.preventDefault();
+        (["part", "seams", "procedures", "sequence", "review"] as const)[Number(e.key) - 1] && s.setStep((["part", "seams", "procedures", "sequence", "review"] as const)[Number(e.key) - 1]!);
+        return;
+      }
+      if (k === "f") {
+        e.preventDefault();
+        if (e.shiftKey && s.selectedSeamId) s.frameSeams([s.selectedSeamId]);
+        else ctrlRef.current?.fitModel(true);
+        return;
+      }
+      if (k === "r") { e.preventDefault(); ctrlRef.current?.resetView(); return; }
+      if (k === "w" && seamTools) { e.preventDefault(); const order = ["solid", "wireframe", "triangles"] as const; s.setViewMode(order[(order.indexOf(s.viewMode) + 1) % order.length]!); return; }
+      if (k === "x" && seamTools) { e.preventDefault(); s.setXray(!s.xray); return; }
+      if (s.step === "seams" && (k === "e" || k === "d")) { e.preventDefault(); s.setTool(k === "e" ? "edge" : "draw"); return; }
+      if (!seamTools) return;
       if (activeTool === "draw") {
         if (e.key === "Enter") { e.preventDefault(); finishDraft(); }
         else if (e.key === "Backspace") { e.preventDefault(); setDraft((d) => d.slice(0, -1)); }
         else if (e.key === "Escape") { setDraft([]); ctrlRef.current?.setSeamPreview(null); ctrlRef.current?.setSnapMarker(null); }
         return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && s.undo) { e.preventDefault(); s.undoLast(); return; }
-      if (e.key === "Escape") { if (s.pendingAction) s.setPendingAction(null); else if (s.selectedSeamId) s.selectSeam(null); else if (s.focus) s.setFocus(null); }
+      if (k === "a" && s.step === "seams") {
+        const sel = s.seams.find((x) => x.id === s.selectedSeamId);
+        if (sel && sel.status === "candidate") { e.preventDefault(); s.acceptSeams([sel.id]); return; }
+      }
+      if (k === "v" && s.selectedSeamId) { e.preventDefault(); s.reverseSeam(s.selectedSeamId); return; }
+      if (e.key === "Escape") { if (s.pendingAction) s.setPendingAction(null); else if (s.selectedSeamId) s.selectSeam(null); else if (s.focus) s.setFocus(null); else setShowHelp(false); }
       if (e.key === "Enter" && s.pendingAction === "split" && s.selectedSeamId) { e.preventDefault(); s.splitSeamAt(s.selectedSeamId, s.splitCuts ?? []); return; }
       if ((e.key === "Delete" || e.key === "Backspace") && s.selectedSeamId && s.step === "seams") { e.preventDefault(); s.deleteSeam(s.selectedSeamId); }
     }
@@ -326,12 +363,13 @@ export default function Viewport() {
     if (s.pendingAction === "split" && selected) {
       if ((s.splitCuts?.length ?? 0) <= 1) {
         const hit = c.pickPath([selected], e, 24);
-        if (!hit) { setNotice("Click on the orange seam, or use the slider in the panel."); return; }
+        if (!hit) { setErr("Click on the orange seam, or use the slider in the panel."); return; }
         s.setSplitCuts([distanceAlong(selected, hit.segment, hit.t) * MM_PER_UNIT[s.frame.units]]);
       }
       const ids = useStore.getState().splitSeamAt(selected.id, useStore.getState().splitCuts ?? []);
       const after = useStore.getState();
       const parts = after.seams.filter((x) => ids.includes(x.id));
+      setErr(null);
       if (parts.length > 1) setNotice(`Cut into ${parts.map((x) => `${x.name} (${seamLengthMm(x, after.frame.units).toFixed(1)} mm)`).join(", ")}.`);
       else if (parts.length === 1) setNotice(`Loop opened: ${parts[0]!.name} now starts and ends at the cut.`);
       return;
@@ -339,7 +377,7 @@ export default function Viewport() {
     if (s.pendingAction === "merge" && selected) {
       const other = c.pickSeam(e);
       const error = other ? s.mergeSeams(selected.id, other) : "Click the seam to merge with.";
-      if (error) setNotice(error);
+      if (error) setErr(error); else setErr(null);
       return;
     }
     s.selectSeam(c.pickSeam(e));
@@ -364,6 +402,8 @@ export default function Viewport() {
         onPointerLeave={() => { setHoverId(null); if (activeTool === "draw" || pendingAction === "split") ctrlRef.current?.setSnapMarker(null); }}
       />
       <ViewControls controller={ctrl} />
+      <div className="part-pill-float"><PartChip /></div>
+      <div className="save-status-float"><SaveStatusLine /></div>
       <div className="orientation-gizmo-host">
         <OrientationGizmo controller={ctrl} onView={(id: ViewId) => { setView(id); ctrl?.setView(id); }} />
       </div>
@@ -375,14 +415,41 @@ export default function Viewport() {
           <button type="button" className="btn-link" onClick={() => { useStore.getState().setFocus(null); ctrlRef.current?.fitModel(true); }}>Show all</button>
         </div>
       )}
-      {undo && undoVisible && (
+      {(undo && undoVisible) || redo ? (
         <div className="undo-toast" role="status">
-          <span>{undo.label}.</span>
-          <button type="button" className="btn-link" onClick={() => { useStore.getState().undoLast(); setUndoVisible(false); }}>Undo</button>
+          <span>{(undo && undoVisible ? undo.label : redo?.label) ?? ""}.</span>
+          {undo && undoVisible && <button type="button" className="btn-link" onClick={() => { useStore.getState().undoLast(); setUndoVisible(false); }}>Undo</button>}
+          {(!undo || !undoVisible) && redo && <button type="button" className="btn-link" onClick={() => useStore.getState().redoLast()}>Redo</button>}
           <span className="undo-key">Ctrl/⌘ Z</span>
         </div>
+      ) : null}
+      {(drawHint || pendingHint || notice) && !err && <div className="viewport-hint" role="status">{notice ?? pendingHint ?? drawHint}</div>}
+      {err && (
+        <div className="viewport-hint viewport-hint-error" role="alert">
+          <span>{err}</span>
+          <button type="button" className="btn-link" onClick={() => setErr(null)}>Dismiss</button>
+        </div>
       )}
-      {(drawHint || pendingHint || notice) && <div className="viewport-hint" role="status">{notice ?? pendingHint ?? drawHint}</div>}
+      {showHelp && (
+        <div className="shortcut-overlay" role="dialog" aria-label="Keyboard shortcuts">
+          <div className="shortcut-card">
+            <header className="result-header"><span className="result-title">Shortcuts (?)</span><button type="button" className="btn-link" onClick={() => setShowHelp(false)}>Close</button></header>
+            <dl className="shortcut-list">
+              <div><dt>1–5</dt><dd>Steps</dd></div>
+              <div><dt>F / Shift+F</dt><dd>Fit all / fit selection</dd></div>
+              <div><dt>R</dt><dd>Reset view</dd></div>
+              <div><dt>W</dt><dd>Next render mode</dd></div>
+              <div><dt>X</dt><dd>X-ray</dd></div>
+              <div><dt>E / D</dt><dd>Pick edge / Draw</dd></div>
+              <div><dt>A</dt><dd>Accept selected candidate</dd></div>
+              <div><dt>V</dt><dd>Reverse selected</dd></div>
+              <div><dt>Enter / Esc</dt><dd>Finish / cancel</dd></div>
+              <div><dt>Ctrl/⌘ Z / Y</dt><dd>Undo / redo</dd></div>
+            </dl>
+          </div>
+        </div>
+      )}
+      <div className="narrow-notice" role="note">Best on a larger screen — picking needs precision.</div>
       {sizeMm && (
         <div className="view-chip view-controls-bottom-left">
           <span className="numeric">{formatSize(sizeMm)} mm</span>
