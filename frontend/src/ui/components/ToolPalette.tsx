@@ -1,22 +1,28 @@
 import { useStore } from "../../state/store";
-import { PointerIcon, PencilIcon } from "../icons";
+import type { Tool } from "../../state/store";
+import { PointerIcon, PencilIcon, EdgeIcon } from "../icons";
+
+const TOOLS: { id: Tool; label: string; icon: React.ReactNode; hint: string }[] = [
+  { id: "select", label: "Select", icon: <PointerIcon />, hint: "Click a seam to select it. Delete removes it, Esc clears the selection." },
+  { id: "edge", label: "Edge chain", icon: <EdgeIcon />, hint: "Hover an edge to preview its chain, click to add it as a seam." },
+  { id: "draw", label: "Draw", icon: <PencilIcon />, hint: "Click points on the part. Points snap to nearby corners. Enter or double-click to finish." },
+];
 
 export function ToolPalette() {
   const tool = useStore((s) => s.tool);
   const setTool = useStore((s) => s.setTool);
-  const hint = tool === "select" ? "Click a seam to select it. Shift-click to add more." : "Click points on the part's surface. Double-click to finish.";
+  const detected = useStore((s) => s.detection.status === "done");
 
   return (
-    <div>
+    <div className="tool-stack">
       <div className="tool-palette" role="toolbar" aria-label="Seam tools">
-        <button type="button" className="tool-btn" aria-pressed={tool === "select"} onClick={() => setTool("select")}>
-          <PointerIcon /> Select
-        </button>
-        <button type="button" className="tool-btn" aria-pressed={tool === "draw"} onClick={() => setTool("draw")}>
-          <PencilIcon /> Draw seam
-        </button>
+        {TOOLS.map((t) => (
+          <button key={t.id} type="button" className="tool-btn" aria-pressed={tool === t.id} onClick={() => setTool(t.id)} disabled={t.id === "edge" && !detected} title={t.id === "edge" && !detected ? "Run detection first to find edges" : undefined}>
+            {t.icon} {t.label}
+          </button>
+        ))}
       </div>
-      <div className="tool-hint" aria-live="polite">{hint}</div>
+      <p className="tool-hint" aria-live="polite">{TOOLS.find((t) => t.id === tool)!.hint}</p>
     </div>
   );
 }

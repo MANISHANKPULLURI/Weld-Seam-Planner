@@ -1,4 +1,4 @@
-import type { Health, MeshStage, RepairStats, StlFormat } from "@weld/core";
+import type { DetectOptions, DetectResult, Health, MeshStage, RepairStats, StlFormat } from "@weld/core";
 
 export type AnalyseRequest = { type: "analyse"; id: number; source: File | ArrayBuffer; name: string };
 
@@ -10,7 +10,16 @@ export type RepairRequest = {
   previous: Pick<Health, "degenerateRemoved" | "duplicateRemoved">;
 };
 
-export type MeshWorkerRequest = AnalyseRequest | RepairRequest;
+export type DetectRequest = {
+  type: "detect";
+  id: number;
+  vertices: Float32Array;
+  indices: Uint32Array;
+  bodyOfTriangle: Uint32Array;
+  options: DetectOptions;
+};
+
+export type MeshWorkerRequest = AnalyseRequest | RepairRequest | DetectRequest;
 
 export type AnalysedPayload = {
   vertices: Float32Array;
@@ -37,4 +46,5 @@ export type MeshWorkerResponse =
   | { type: "progress"; id: number; stage: MeshStage; fraction: number }
   | { type: "analysed"; id: number; result: AnalysedPayload }
   | { type: "repaired"; id: number; result: RepairedPayload }
+  | { type: "detected"; id: number; result: DetectResult }
   | { type: "error"; id: number; message: string };

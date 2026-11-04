@@ -9,6 +9,10 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
   const setProjection = useStore((s) => s.setProjection);
   const setViewMode = useStore((s) => s.setViewMode);
   const setView = useStore((s) => s.setView);
+  const xray = useStore((s) => s.xray);
+  const setXray = useStore((s) => s.setXray);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
 
   function proj(p: "perspective" | "orthographic") {
     setProjection(p);
@@ -48,7 +52,24 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
         <button type="button" className="view-btn" onClick={reset} aria-label="Reset view" title="Reset / Frame (R)">
           <RefreshIcon size={12} /> Reset View
         </button>
+        <button type="button" className="view-btn" aria-pressed={xray} onClick={() => setXray(!xray)} title="See through the part to find seams inside it">
+          X-ray
+        </button>
+        <div className="view-segmented" role="group" aria-label="Section view">
+          {(["off", "x", "y", "z"] as const).map((axis) => (
+            <button key={axis} type="button" aria-pressed={axis === "off" ? !section : section?.axis === axis} onClick={() => setSection(axis === "off" ? null : { axis, offset: section?.offset ?? 0.5 })} title={axis === "off" ? "No section" : `Cut across ${axis.toUpperCase()}`}>
+              {axis === "off" ? "Section" : axis.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
+      {section && (
+        <label className="view-controls view-section-slider">
+          <span>Cut at</span>
+          <input type="range" min={0} max={1} step={0.01} value={section.offset} onChange={(e) => setSection({ axis: section.axis, offset: Number(e.target.value) })} aria-label={`Section position along ${section.axis.toUpperCase()}`} />
+          <span className="numeric">{Math.round(section.offset * 100)}%</span>
+        </label>
+      )}
 
       {}
       <div className="view-controls view-controls-bottom-right" role="group" aria-label="Standard views, Z up">

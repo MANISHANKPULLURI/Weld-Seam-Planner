@@ -131,3 +131,22 @@ export function InfoIcon({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
+
+export function EdgeIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.5 11.5L7 4.5L13.5 6.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="7" cy="4.5" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function EyeIcon({ size = 14, off = false }: { size?: number; off?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M1.5 8C3 5 5.3 3.5 8 3.5S13 5 14.5 8C13 11 10.7 12.5 8 12.5S3 11 1.5 8Z" stroke="currentColor" strokeWidth={1.4} />
+      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth={1.4} />
+      {off && <path d="M2.5 13.5L13.5 2.5" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" />}
+    </svg>
+  );
+}
