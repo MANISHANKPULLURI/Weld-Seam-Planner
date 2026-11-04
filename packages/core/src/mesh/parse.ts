@@ -84,6 +84,7 @@ function parseBinary(buffer: ArrayBuffer, count: number, warnings: string[], max
 
   const view = new DataView(buffer);
   const positions = new Float32Array(count * 9);
+  const normals = new Float32Array(count * 3);
   const step = Math.max(1, Math.floor(count / 50));
 
   let offset = 84;
@@ -91,6 +92,10 @@ function parseBinary(buffer: ArrayBuffer, count: number, warnings: string[], max
 
   for (let t = 0; t < count; t++) {
 
+    for (let k = 0; k < 3; k++) {
+      const n = view.getFloat32(offset + k * 4, true);
+      normals[t * 3 + k] = Number.isFinite(n) ? n : 0;
+    }
     offset += 12;
 
     for (let k = 0; k < 9; k++) {
@@ -106,7 +111,7 @@ function parseBinary(buffer: ArrayBuffer, count: number, warnings: string[], max
     if (t % step === 0) onProgress(t / count);
   }
 
-  return { positions, format: "binary", triangleCount: count, solids: 0, warnings };
+  return { positions, normals, format: "binary", triangleCount: count, solids: 0, warnings };
 }
 
 
@@ -117,6 +122,7 @@ function parseAscii(bytes: Uint8Array, maxTriangles: number, onProgress: (f: num
 
   let values = new Float32Array(Math.max(9 * 64, Math.floor(n / 25)));
   let count = 0;
+  const facetNormals: number[] = [];
   let solids = 0;
   let nextReport = 1 << 22;
   let i = 0;
@@ -156,6 +162,18 @@ function parseAscii(bytes: Uint8Array, maxTriangles: number, onProgress: (f: num
       continue;
     }
 
+    if (c === 0x6e && (i === 0 || isSpace(bytes[i - 1]!)) && matchesWord(bytes, i, "normal")) {
+      i += 6;
+      for (let k = 0; k < 3; k++) {
+        while (i < n && isSpace(bytes[i]!)) i++;
+        const start = i;
+        while (i < n && !isSpace(bytes[i]!)) i++;
+        const value = Number(String.fromCharCode.apply(null, Array.from(bytes.subarray(start, i))));
+        facetNormals.push(Number.isFinite(value) ? value : 0);
+      }
+      continue;
+    }
+
     if (c === 0x65 && matchesWord(bytes, i, "endsolid")) {
       solids++;
       i += 8;
@@ -177,7 +195,10 @@ function parseAscii(bytes: Uint8Array, maxTriangles: number, onProgress: (f: num
 
   if (usable !== count) warnings.push(`${(count - usable) / 3} stray vertices at the end of the file were ignored.`);
 
-  return { positions: values.slice(0, usable), format: "ascii", triangleCount: usable / 9, solids: Math.max(1, solids), warnings };
+  const triangleCount = usable / 9;
+  const normals = facetNormals.length >= triangleCount * 3 ? new Float32Array(facetNormals.slice(0, triangleCount * 3)) : null;
+
+  return { positions: values.slice(0, usable), normals, format: "ascii", triangleCount, solids: Math.max(1, solids), warnings };
 }
 
 

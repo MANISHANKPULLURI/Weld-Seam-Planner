@@ -15,7 +15,7 @@ export const seamSchema = z.object({
 
   joint: z.object({
 
-    type: z.enum(["fillet", "butt", "corner", "t_joint"]).describe("Joint type guess"),
+    type: z.enum(["fillet", "butt", "corner", "unknown"]).describe("Joint type guess"),
 
     dihedral_deg: z.number().min(0).max(180).describe("Dihedral angle degrees"),
 
@@ -29,7 +29,7 @@ export const seamSchema = z.object({
 
     iso_6947: z.enum(["PA", "PB", "PC", "PD", "PE", "PF", "PG", "inclined"]).describe("ISO 6947 code derived"),
 
-    aws: z.enum(["1G", "1F", "2G", "2F", "4G", "4F", "3G", "inclined"]).describe("AWS equivalent"),
+    aws: z.enum(["1G", "1F", "2G", "2F", "3G", "3F", "4G", "4F", "inclined"]).describe("AWS equivalent"),
 
     source: z.enum(["derived", "user"]).describe("Source derived or user override"),
 
@@ -39,7 +39,29 @@ export const seamSchema = z.object({
 
   procedure_ref: z.string().describe("Reference to procedure id"),
 
-  overrides: z.record(z.string(), z.unknown()).describe("Per-seam procedure overrides never stored twice beyond procedure"),
+  overrides: z.object({
+
+    voltage_v: z.number().positive().optional(),
+
+    current_a: z.number().positive().optional(),
+
+    wire_feed_speed_m_min: z.number().positive().optional(),
+
+    travel_speed_mm_min: z.number().positive().optional(),
+
+  }).describe("Values that differ from the procedure for this seam only"),
+
+  effective: z.object({
+
+    voltage_v: z.number().positive(),
+
+    current_a: z.number().positive(),
+
+    wire_feed_speed_m_min: z.number().positive().nullable(),
+
+    travel_speed_mm_min: z.number().positive(),
+
+  }).describe("Values the robot should use: procedure plus overrides"),
 
   torch: z.object({
 
@@ -69,6 +91,16 @@ export const seamSchema = z.object({
 
   }).describe("End settings"),
 
+  weld_size: z.object({
+
+    basis: z.enum(["a", "z"]).describe("a = throat thickness (ISO 2553), z = leg length"),
+
+    value_mm: z.number().positive().describe("Size in millimetres on the given basis"),
+
+    passes: z.number().int().positive().describe("Number of passes"),
+
+  }).describe("Weld size"),
+
   intermittent: z.object({
 
     weld_length_mm: z.number().positive().describe("Weld length millimetres"),
@@ -76,6 +108,8 @@ export const seamSchema = z.object({
     pitch_mm: z.number().positive().describe("Pitch millimetres"),
 
   }).nullable().describe("Intermittent settings or null for continuous"),
+
+  wait_after_s: z.number().nonnegative().describe("Pause after this seam (interpass / cooling), seconds"),
 
   supervision: z.enum(["operator_confirm", "auto"]).describe("Supervision mode"),
 

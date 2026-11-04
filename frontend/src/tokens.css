@@ -78,6 +78,7 @@
   --candidate: var(--rev-green-t4);
   --seam-candidate: var(--light-sand-s3);
   --seam-accepted: var(--rev-green-t4);
+  --section-cap: var(--light-sand-s4);
 
   --text: var(--light-sand);
   --text-secondary: var(--light-sand-s3);
@@ -112,6 +113,7 @@ html[data-theme="light"] {
   --candidate: var(--rev-green-t4);
   --seam-candidate: var(--dark-forest-t4);
   --seam-accepted: var(--rev-green-t2);
+  --section-cap: var(--dark-forest-t4);
   --text: var(--dark-forest-t2);
   --text-secondary: var(--dark-forest-t3);
   --text-muted: var(--rev-green-t2);

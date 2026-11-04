@@ -4,12 +4,16 @@ import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 import { UP_AXIS_QUATERNION_XYZW } from "@weld/core";
 import { SeamLayer } from "./SeamLayer.ts";
 import type { PathHit, SeamDrawItem } from "./SeamLayer.ts";
+import { poseAt, totalDuration, weldedPart } from "./simulation.ts";
+import type { SimSegment } from "./simulation.ts";
 import type { UpAxis } from "@weld/core";
 import { chooseEngineeringInterval, viewDirectionForId as viewDir, computeFitDistance as calcFitDistance } from "./viewMath.ts";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
+
+export type SurfacePoint = { point: [number, number, number]; normal: [number, number, number]; snapped: "end" | "corner" | "edge" | null };
 
 export type ViewId = "iso" | "top" | "bottom" | "front" | "back" | "left" | "right";
 
@@ -40,7 +44,11 @@ export class SceneController {
   private xray = false;
   private dimmed = false;
   private clipPlane = new THREE.Plane();
-  private clipping: THREE.Plane[] = [];
+  private clipping: THREE.Plane[] = this.seamLayer.clipping;
+  private cap: THREE.Mesh | null = null;
+  private ghost: THREE.Mesh | null = null;
+  private flowRaf = 0;
+  private sim: { segments: SimSegment[]; t: number; speed: number; playing: boolean; raf: number; onProgress: (t: number, total: number, segment: number) => void } | null = null;
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private onDblClickHandler: ((e: MouseEvent) => void) | null = null;
@@ -290,6 +298,7 @@ export class SceneController {
 
   updateTheme() {
     this.seamLayer.updateTheme();
+    if (this.cap) (this.cap.material as THREE.MeshBasicMaterial).color.set(cssVar("--section-cap") || "#93938D");
     const bg = cssVar("--bg-viewport");
     if (bg) this.scene.background = new THREE.Color(bg);
     if (this.mesh) {
@@ -458,6 +467,7 @@ export class SceneController {
     geo.computeVertexNormals();
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
+    this.seamLayer.markerSize = geo.boundingSphere!.radius * 0.07;
 
     const solidColor = cssVar("--part-solid") || (document.documentElement.getAttribute("data-theme") === "light" ? "#141E00" : "#C5C5BD");
     const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor), flatShading: true, roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 4 });
@@ -467,6 +477,12 @@ export class SceneController {
     this.mesh.raycast = acceleratedRaycast;
     this.mesh.userData.isModel = true;
     this.partGroup.add(this.mesh);
+
+    // Inside faces drawn flat behind the section plane read as the cut surface.
+    this.cap = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(cssVar("--section-cap") || "#93938D"), side: THREE.BackSide, clippingPlanes: this.clipping }));
+    this.cap.raycast = () => {};
+    this.cap.visible = this.clipping.length > 0;
+    this.partGroup.add(this.cap);
 
     if (this.lights.length === 0) {
       const lightColor = cssVar("--light-sand") || "#F6F6EE";
@@ -513,6 +529,8 @@ export class SceneController {
   }
 
   private disposePart() {
+    this.setGhost(null);
+    if (this.cap) { this.partGroup.remove(this.cap); (this.cap.material as THREE.Material).dispose(); this.cap = null; }
     if (this.mesh) { this.partGroup.remove(this.mesh); this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose(); this.mesh = null; }
     if (this.triangleEdges) { this.partGroup.remove(this.triangleEdges); this.triangleEdges.geometry.dispose(); (this.triangleEdges.material as THREE.Material).dispose(); this.triangleEdges = null; }
   }
@@ -530,6 +548,7 @@ export class SceneController {
   setXray(on: boolean) {
     this.xray = on;
     this.seamLayer.setXray(on);
+    if (this.cap) this.cap.visible = this.clipping.length > 0 && !on;
     this.applyOpacity();
   }
 
@@ -544,15 +563,19 @@ export class SceneController {
     this.render();
   }
 
-  // Cuts the part at `offset` (0..1) along a world axis, keeping the lower side. Seams stay visible.
-  setSection(section: { axis: "x" | "y" | "z"; offset: number } | null) {
+  // Cuts the part at `offset` (0..1 of the part's extent) along a world axis. Keeps the lower side,
+  // or the upper side when flipped. Seams on the removed side are hidden and cannot be picked.
+  setSection(section: { axis: "x" | "y" | "z"; offset: number; flipped: boolean } | null) {
     this.clipping.length = 0;
     if (section && this.bounds) {
-      const normal = new THREE.Vector3(section.axis === "x" ? -1 : 0, section.axis === "y" ? -1 : 0, section.axis === "z" ? -1 : 0);
-      const at = this.bounds.min.getComponent("xyz".indexOf(section.axis)) + this.bounds.size.getComponent("xyz".indexOf(section.axis)) * section.offset;
-      this.clipPlane.set(normal, at);
+      const k = "xyz".indexOf(section.axis);
+      const at = this.bounds.min.getComponent(k) + this.bounds.size.getComponent(k) * section.offset;
+      const sign = section.flipped ? 1 : -1;
+      const normal = new THREE.Vector3().setComponent(k, sign);
+      this.clipPlane.set(normal, -sign * at);
       this.clipping.push(this.clipPlane);
     }
+    if (this.cap) this.cap.visible = this.clipping.length > 0 && !this.xray;
     this.render();
   }
 
@@ -565,6 +588,110 @@ export class SceneController {
     this.setViewMode(this.viewMode);
   }
 
+  // Focus mode: these triangles are drawn as a faint ghost so the focused part stands out.
+  setGhost(indices: Uint32Array | null) {
+    if (this.ghost) { this.partGroup.remove(this.ghost); this.ghost.geometry.dispose(); (this.ghost.material as THREE.Material).dispose(); this.ghost = null; }
+    if (indices && indices.length && this.mesh) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", (this.mesh.geometry as THREE.BufferGeometry).getAttribute("position"));
+      geo.setIndex(new THREE.BufferAttribute(indices, 1));
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshStandardMaterial({ color: (this.mesh.material as THREE.MeshStandardMaterial).color, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, clippingPlanes: this.clipping });
+      this.ghost = new THREE.Mesh(geo, mat);
+      this.ghost.raycast = () => {};
+      this.ghost.renderOrder = 5;
+      this.partGroup.add(this.ghost);
+    }
+    this.render();
+  }
+
+  // Frames a box given in part (file) coordinates.
+  fitBox(min: [number, number, number], max: [number, number, number], animate = true) {
+    this.partGroup.updateMatrixWorld();
+    const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)).applyMatrix4(this.partGroup.matrixWorld);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(size.length() / 2, 1e-3);
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    if (dir.lengthSq() < 1e-6) dir.set(0.7, -0.6, 0.7).normalize();
+    const aspect = this.size.w / Math.max(1, this.size.h);
+    const distance = Math.max(calcFitDistance({ size, sphereRadius: radius }, this.cameraPersp.fov, aspect, "perspective"), radius * 2.2);
+    if (this.projection === "orthographic" && this.bounds) {
+      this.cameraOrtho.zoom = Math.max(0.05, this.bounds.sphereRadius / radius * 0.8);
+      this.cameraOrtho.updateProjectionMatrix();
+    }
+    this.animateCamera(this.camera.position.clone(), center.clone().add(dir.multiplyScalar(distance)), this.controls.target.clone(), center, animate ? 500 : 0);
+  }
+
+  flashSeams(ids: string[], reversed = false) {
+    this.seamLayer.flashSeams(ids, reversed);
+    this.startFlow();
+  }
+
+  setSeamNames(names: Map<string, string>) {
+    this.seamLayer.names = names;
+  }
+
+  // Keeps the flowing direction arrows (and change flashes) animating.
+  private startFlow() {
+    if (this.flowRaf) return;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const active = this.seamLayer.tickFlow((now - last) / 1000);
+      last = now;
+      this.renderer.render(this.scene, this.camera);
+      this.flowRaf = active ? requestAnimationFrame(tick) : 0;
+    };
+    this.flowRaf = requestAnimationFrame(tick);
+  }
+
+  // Weld simulation: segments in order; progress is reported in real seconds.
+  setSimulation(segments: SimSegment[] | null, onProgress: (t: number, total: number, segment: number) => void = () => {}) {
+    if (this.sim) cancelAnimationFrame(this.sim.raf);
+    this.sim = segments && segments.length ? { segments, t: 0, speed: 10, playing: false, raf: 0, onProgress } : null;
+    this.drawSim();
+  }
+
+  simPlay(speed: number) {
+    const sim = this.sim;
+    if (!sim) return;
+    sim.speed = speed;
+    if (sim.t >= totalDuration(sim.segments)) sim.t = 0;
+    if (sim.playing) return;
+    sim.playing = true;
+    let last = performance.now();
+    const tick = (now: number) => {
+      if (!this.sim || !this.sim.playing) return;
+      const s = this.sim;
+      s.t = Math.min(totalDuration(s.segments), s.t + ((now - last) / 1000) * s.speed);
+      last = now;
+      this.drawSim();
+      if (s.t >= totalDuration(s.segments)) { s.playing = false; return; }
+      s.raf = requestAnimationFrame(tick);
+    };
+    sim.raf = requestAnimationFrame(tick);
+  }
+
+  simPause() { if (this.sim) { this.sim.playing = false; cancelAnimationFrame(this.sim.raf); } }
+  simSpeed(speed: number) { if (this.sim) this.sim.speed = speed; }
+  simSeek(t: number) { if (this.sim) { this.sim.t = Math.max(0, Math.min(totalDuration(this.sim.segments), t)); this.drawSim(); } }
+
+  private drawSim() {
+    const sim = this.sim;
+    if (!sim) { this.seamLayer.setSimFrame(null, [], null); this.render(); return; }
+    const pose = poseAt(sim.segments, sim.t);
+    const done: { key: number; points: Float32Array; closed: boolean }[] = [];
+    let partial: Float32Array | null = null;
+    sim.segments.forEach((s, k) => {
+      if (s.kind !== "arc" || !pose) return;
+      if (k < pose.segment || (k === pose.segment && pose.fraction >= 1)) done.push({ key: k, points: s.points, closed: s.closed });
+      else if (k === pose.segment) partial = weldedPart(s, pose.fraction);
+    });
+    this.seamLayer.setSimFrame(pose, done, partial);
+    sim.onProgress(sim.t, totalDuration(sim.segments), pose?.segment ?? 0);
+    this.renderer.render(this.scene, this.camera);
+  }
+
   setSeams(items: SeamDrawItem[]) {
     this.seamLayer.setSeams(items);
     this.render();
@@ -573,6 +700,32 @@ export class SceneController {
   setSeamHighlight(selectedId: string | null, hoverId: string | null) {
     this.seamLayer.setHighlight(selectedId, hoverId);
     this.render();
+  }
+
+  setSequence(items: { points: Float32Array; closed: boolean }[] | null) {
+    this.seamLayer.setSequence(items);
+    this.render();
+  }
+
+  setSplitPreview(pieces: { points: Float32Array; closed: boolean }[], cuts: [number, number, number][]) {
+    this.seamLayer.setSplitPreview(pieces, cuts.map((c) => new THREE.Vector3(...c)));
+    this.render();
+  }
+
+  toPart(world: THREE.Vector3): [number, number, number] {
+    const v = this.partGroup.worldToLocal(world.clone());
+    return [v.x, v.y, v.z];
+  }
+
+  setSnapMarker(point: [number, number, number] | null, kind?: "end" | "corner" | "edge" | "surface" | "split") {
+    this.seamLayer.setSnapMarker(point ? new THREE.Vector3(...point) : null, kind);
+    this.render();
+  }
+
+  // First surface hit on the side of the section that is still shown.
+  private visibleHit(): THREE.Intersection | undefined {
+    if (!this.mesh) return undefined;
+    return this.raycaster.intersectObject(this.mesh, false).find((h) => this.clipping.every((plane) => plane.distanceToPoint(h.point) >= 0));
   }
 
   setSeamPreview(points: Float32Array | null, closed = false) {
@@ -587,45 +740,65 @@ export class SceneController {
     return hit ? items[hit.index]!.id : null;
   }
 
+  private projectionCache = new WeakMap<object, { key: string; screens: Float32Array[] }>();
+
   pickPath(paths: { points: Float32Array; closed: boolean }[], event: { clientX: number; clientY: number }, maxPixels = 8): PathHit | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
-    const hits = SeamLayer.pick(paths, this.partGroup.matrixWorld, this.camera, { w: rect.width, h: rect.height }, event.clientX - rect.left, event.clientY - rect.top, maxPixels);
+    const key = [...this.camera.matrixWorld.elements, ...this.camera.projectionMatrix.elements, ...this.partGroup.matrixWorld.elements, rect.width, rect.height].join(",");
+    let cached = this.projectionCache.get(paths);
+    if (!cached || cached.key !== key) {
+      cached = { key, screens: SeamLayer.project(paths, this.partGroup.matrixWorld, this.camera, { w: rect.width, h: rect.height }) };
+      this.projectionCache.set(paths, cached);
+    }
+    const hits = SeamLayer.pick(paths, cached.screens, this.partGroup.matrixWorld, event.clientX - rect.left, event.clientY - rect.top, maxPixels)
+      .filter((hit) => this.clipping.every((plane) => plane.distanceToPoint(hit.world) >= 0));
     if (this.xray || !this.mesh) return hits[0] ?? null;
     const slack = (this.bounds?.sphereRadius ?? 1) * 0.005;
     // Nearest visible one: cast toward each seam point (not through the cursor beside it) and skip hidden ones.
     return hits.find((hit) => {
       const ndc = hit.world.clone().project(this.camera);
       this.raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), this.camera);
-      const surface = this.raycaster.intersectObject(this.mesh!, false)[0];
+      const surface = this.visibleHit();
       return !surface || this.raycaster.ray.origin.distanceTo(hit.world) <= surface.distance + slack;
     }) ?? null;
   }
 
-  // Point on the visible surface in part (file) coordinates, snapped to a nearby corner, with its outward normal.
-  surfacePoint(event: { clientX: number; clientY: number }, snapPixels = 10): { point: [number, number, number]; normal: [number, number, number]; snapped: boolean } | null {
+  // Point on the visible surface in part (file) coordinates with its outward normal, snapped like CAD:
+  // the end of an existing seam first (so seams connect), then a mesh corner, then a part edge.
+  surfacePoint(event: { clientX: number; clientY: number }, snap: { ends?: [number, number, number][]; edges?: { points: Float32Array; closed: boolean }[] } = {}): SurfacePoint | null {
     if (!this.mesh) return null;
     this.setRayFromEvent(event);
-    const hit = this.raycaster.intersectObject(this.mesh, false)[0];
+    const hit = this.visibleHit();
     if (!hit || !hit.face) return null;
 
-    const geo = this.mesh.geometry as THREE.BufferGeometry;
-    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
-    const local = this.partGroup.worldToLocal(hit.point.clone());
+    const pos = (this.mesh.geometry as THREE.BufferGeometry).getAttribute("position") as THREE.BufferAttribute;
     const rect = this.renderer.domElement.getBoundingClientRect();
-    const toScreen = (v: THREE.Vector3) => {
+    const pixels = (v: THREE.Vector3) => {
       const p = v.clone().applyMatrix4(this.partGroup.matrixWorld).project(this.camera);
-      return [(p.x + 1) / 2 * rect.width + rect.left, (1 - p.y) / 2 * rect.height + rect.top];
+      return Math.hypot((p.x + 1) / 2 * rect.width + rect.left - event.clientX, (1 - p.y) / 2 * rect.height + rect.top - event.clientY);
     };
+    const n = hit.face.normal;
+    const at = (v: THREE.Vector3, snapped: SurfacePoint["snapped"]): SurfacePoint => ({ point: [v.x, v.y, v.z], normal: [n.x, n.y, n.z], snapped });
 
-    let snapped = false;
-    for (const v of [hit.face.a, hit.face.b, hit.face.c]) {
-      const corner = new THREE.Vector3().fromBufferAttribute(pos, v);
-      const [sx, sy] = toScreen(corner);
-      if (Math.hypot(sx! - event.clientX, sy! - event.clientY) <= snapPixels) { local.copy(corner); snapped = true; break; }
+    let best: { v: THREE.Vector3; d: number } | null = null;
+    for (const e of snap.ends ?? []) {
+      const v = new THREE.Vector3(...e);
+      const d = pixels(v);
+      if (d <= 14 && (!best || d < best.d)) best = { v, d };
+    }
+    if (best) return at(best.v, "end");
+
+    for (const i of [hit.face.a, hit.face.b, hit.face.c]) {
+      const v = new THREE.Vector3().fromBufferAttribute(pos, i);
+      if (pixels(v) <= 10) return at(v, "corner");
     }
 
-    const n = hit.face.normal;
-    return { point: [local.x, local.y, local.z], normal: [n.x, n.y, n.z], snapped };
+    if (snap.edges?.length) {
+      const edge = this.pickPath(snap.edges, event, 8);
+      if (edge) return at(this.partGroup.worldToLocal(edge.world.clone()), "edge");
+    }
+
+    return at(this.partGroup.worldToLocal(hit.point.clone()), null);
   }
 
   private setRayFromEvent(event: { clientX: number; clientY: number }) {
@@ -704,6 +877,13 @@ export class SceneController {
         }
       });
     }
+  }
+
+  sectionInPartSpace(): { normal: [number, number, number]; constant: number } | null {
+    if (this.clipping.length === 0) return null;
+    this.partGroup.updateMatrixWorld();
+    const plane = this.clipPlane.clone().applyMatrix4(this.partGroup.matrixWorld.clone().invert());
+    return { normal: plane.normal.toArray() as [number, number, number], constant: plane.constant };
   }
 
   dispose() {

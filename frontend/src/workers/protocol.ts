@@ -7,7 +7,7 @@ export type RepairRequest = {
   id: number;
   vertices: Float32Array;
   indices: Uint32Array;
-  previous: Pick<Health, "degenerateRemoved" | "duplicateRemoved">;
+  previous: Pick<Health, "degenerateRemoved" | "duplicateRemoved" | "flippedFaces">;
 };
 
 export type DetectRequest = {

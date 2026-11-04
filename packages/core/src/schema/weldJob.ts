@@ -36,6 +36,10 @@ export const weldJobSchema = z.object({
 
       default_supervision: z.enum(["operator_confirm", "auto"]).describe("Default supervision mode"),
 
+      air_speed_mm_s: z.number().positive().describe("Torch speed for moves between seams"),
+
+      waypoint_spacing_mm: z.number().positive().describe("Distance between exported waypoints along each seam"),
+
     }).describe("Execution settings"),
 
   }).describe("Job metadata"),
@@ -77,6 +81,12 @@ export const weldJobSchema = z.object({
     total_length_mm: z.number().nonnegative().describe("Total length millimetres"),
 
     arc_time_s: z.number().nonnegative().describe("Total arc time seconds"),
+
+    air_travel_mm: z.number().nonnegative().describe("Straight-line torch travel between seams, including approach and retract"),
+
+    air_time_s: z.number().nonnegative().describe("Air travel time at the job's air speed"),
+
+    wait_time_s: z.number().nonnegative().describe("Sum of waits between seams"),
 
     estimated_cycle_time_s: z.number().nonnegative().describe("Estimated cycle time seconds arc plus travel plus interpass"),
 

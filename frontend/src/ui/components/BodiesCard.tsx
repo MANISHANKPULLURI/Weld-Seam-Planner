@@ -1,4 +1,5 @@
 import { useStore } from "../../state/store";
+import { focusForBody } from "../../lib/focus";
 import { formatCount } from "../../domain/mesh/describe";
 import { EyeIcon } from "../icons";
 
@@ -22,6 +23,7 @@ export function BodiesCard() {
             <button type="button" className="icon-btn" onClick={() => toggleBody(i)} aria-label={hidden.includes(i) ? `Show body ${i + 1}` : `Hide body ${i + 1}`}><EyeIcon off={hidden.includes(i)} /></button>
             <span>Body {i + 1}</span>
             <span className="numeric body-row-meta">{formatCount(n)} triangles</span>
+            <button type="button" className="btn-link" onClick={() => useStore.getState().setFocus(focusForBody(mesh, i))} title="Zoom to this part and fade the rest">Focus</button>
             <button type="button" className="btn-link" onClick={() => isolateBody(i)}>Isolate</button>
           </li>
         ))}

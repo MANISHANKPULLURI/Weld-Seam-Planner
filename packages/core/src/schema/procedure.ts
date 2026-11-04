@@ -63,9 +63,9 @@ export const procedureSchema = z.object({
 
   electrical: z.object({
 
-    voltage_v: z.number().positive().nullable().describe("Voltage volts for MIG/MAG or null for TIG"),
+    voltage_v: z.number().positive().describe("Arc voltage, volts"),
 
-    current_a: z.number().positive().nullable().describe("Current amps for TIG or null for MIG/MAG"),
+    current_a: z.number().positive().describe("Welding current, amps (needed for arc energy)"),
 
     wire_feed_speed_m_min: z.number().positive().nullable().describe("Wire feed speed metres per minute or null"),
 
@@ -97,7 +97,19 @@ export const procedureSchema = z.object({
 
     }).nullable().describe("Travel speed limits or null"),
 
+    max_throat_per_pass_mm: z.number().positive().nullable().describe("Largest throat one pass can lay; bigger welds need more passes. Null = no check"),
+
   }).describe("User-defined limits"),
+
+  seam_defaults: z.object({
+
+    weld_size: z.object({ basis: z.enum(["a", "z"]), value_mm: z.number().positive() }).describe("Weld size given to seams this procedure is first applied to"),
+
+    travel_angle_deg: z.number().describe("Default travel angle, positive = push"),
+
+    stick_out_mm: z.number().nonnegative().describe("Default contact tip to work distance"),
+
+  }).describe("Defaults for seams when this procedure is first applied"),
 
 }).describe("Welding procedure");
 

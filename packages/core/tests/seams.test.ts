@@ -66,7 +66,45 @@ describe("detectSeams", () => {
     expect(seamId("inside_corner", { ...c, points: reversed })).toBe(c.id);
   });
 
+  test("a section keeps only the visible side and trims seams at the cut", () => {
+    const plates = [...box(0, 0, 0, 100, 200, 10), ...box(45, 0, 10, 55, 200, 60)];
+    const { candidates } = detect(plates, { region: { keep: { normal: [0, -1, 0], constant: 100 } } });
+    expect(lengths(candidates)).toEqual([10, 100, 100]);
+    expect(candidates.every((c) => Array.from(c.points).every((v, i) => i % 3 !== 1 || v <= 100 + 1e-4))).toBe(true);
+  });
+
+  test("a closed loop crossing the cut becomes the open piece on the kept side", () => {
+    const column = [...box(0, 0, 0, 100, 100, 10), ...box(40, 40, -20, 60, 60, 40)];
+    const crossing = detect(column, { region: { keep: { normal: [-1, 0, 0], constant: 50 } } }).candidates.filter((c) => c.source === "intersection");
+    expect(crossing.every((c) => !c.closed)).toBe(true);
+    expect(crossing.reduce((s, c) => s + c.length, 0)).toBeCloseTo(80, 3);
+  });
+
+  test("hidden bodies are left out of detection", () => {
+    const plates = [...box(0, 0, 0, 100, 200, 10), ...box(45, 0, 10, 55, 200, 60)];
+    expect(detect(plates, { region: { hiddenBodies: [1] } }).candidates).toEqual([]);
+    expect(detect(plates, { region: { hiddenBodies: [1] } }).featureChains.length).toBeGreaterThan(0);
+  });
+
   test("feature chains include convex and concave edges for picking", () => {
     expect(detect(box(0, 0, 0, 50, 40, 30)).featureChains.length).toBe(12);
+  });
+});
+
+describe("split helpers", async () => {
+  const { locateAlong, splitAtDistances, measure } = await import("../src/index.ts");
+  const line = measure({ points: new Float32Array([0, 0, 0, 10, 0, 0, 10, 10, 0]), normalsA: new Float32Array(9), normalsB: new Float32Array(9), closed: false, length: 0 });
+
+  test("locates a distance along the path", () => {
+    expect(locateAlong(line, 15).point).toEqual([10, 5, 0]);
+  });
+
+  test("splits into even pieces", () => {
+    expect(splitAtDistances(line, [5, 10, 15]).map((p) => Math.round(p.length))).toEqual([5, 5, 5, 5]);
+  });
+
+  test("a loop opens at the first cut, then splits", () => {
+    const loop = measure({ points: new Float32Array([0, 0, 0, 10, 0, 0, 10, 10, 0, 0, 10, 0]), normalsA: new Float32Array(12), normalsB: new Float32Array(12), closed: true, length: 0 });
+    expect(splitAtDistances(loop, [10, 30]).map((p) => Math.round(p.length))).toEqual([20, 20]);
   });
 });

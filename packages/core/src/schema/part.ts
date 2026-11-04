@@ -5,7 +5,7 @@ export const partSchema = z.object({
 
   filename: z.string().describe("Original STL filename"),
 
-  sha256: z.string().regex(/^[0-9a-f]{64}$/).describe("SHA256 hex of original file bytes"),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/).nullable().describe("SHA256 hex of original file bytes, null if the browser could not hash"),
 
   triangle_count: z.number().int().nonnegative().describe("Triangle count in original file"),
 

@@ -1,4 +1,5 @@
-import { useStore } from "../state/store";
+import { MM_PER_UNIT } from "@weld/core";
+import { autoMinLengthMm, useStore } from "../state/store";
 import type { DetectOptions } from "@weld/core";
 import type { MeshWorkerRequest, MeshWorkerResponse } from "../workers/protocol";
 
@@ -57,7 +58,7 @@ export function repairCurrentMesh() {
 
   run(
     currentWorker(),
-    { type: "repair", id, vertices: mesh.positions.slice(), indices: mesh.indices.slice(), previous: mesh.health },
+    { type: "repair", id, vertices: mesh.positions.slice(), indices: mesh.orientedIndices.slice(), previous: mesh.health },
     [],
     (message) => {
       const s = useStore.getState();
@@ -68,12 +69,12 @@ export function repairCurrentMesh() {
   );
 }
 
-export function detectSeams(options: DetectOptions) {
+export function detectSeams(options: DetectOptions, scope: string | null = null) {
   const state = useStore.getState();
   const mesh = state.mesh;
   if (!mesh) return;
 
-  const generation = state.startDetect();
+  const generation = state.startDetect(scope);
   const id = ++requestId;
 
   run(
@@ -87,4 +88,21 @@ export function detectSeams(options: DetectOptions) {
     },
     () => useStore.getState().failDetect(generation, "Seam detection failed in this browser."),
   );
+}
+
+// Settings are entered in mm; detection works in the file's own units. Hidden bodies are skipped and
+// a confirmed work area keeps only its side. An unconfirmed section is just a view.
+export function detectWithSettings() {
+  const { detectSettings: d, frame, health, hiddenBodies, workArea } = useStore.getState();
+  const scale = MM_PER_UNIT[frame.units];
+  const minLengthMm = d.minLengthMm ?? autoMinLengthMm(health, frame.units);
+  const region = { hiddenBodies, keep: workArea?.plane ?? null };
+  detectSeams({ featureAngleDeg: d.featureAngleDeg, minLength: minLengthMm / scale, contactTolerance: d.gapMm / scale, includeOutside: d.includeOutside, region }, detectionScope(workArea?.label ?? null, hiddenBodies.length));
+}
+
+export function detectionScope(area: string | null, hidden: number): string | null {
+  if (area && hidden) return `in ${area}, ${hidden} hidden part${hidden === 1 ? "" : "s"} skipped`;
+  if (area) return `in ${area}`;
+  if (hidden) return `on visible parts, ${hidden} hidden part${hidden === 1 ? "" : "s"} skipped`;
+  return null;
 }

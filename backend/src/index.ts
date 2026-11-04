@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { MAX_FILE_BYTES, meshRoutes } from "./controllers/mesh_detection_repair_controller/mesh.controller.ts";
 import { schemaRoutes } from "./controllers/weld_job_controller/schema.controller.ts";
-import { weldJobRoutes } from "./controllers/weld_job_controller/weldJob.controller.ts";
+import { procedureRoutes, weldJobRoutes } from "./controllers/weld_job_controller/weldJob.controller.ts";
 
 
 export const app = new Hono();
@@ -30,6 +30,7 @@ app.get("/api/v1/health", (c) => {
 app.route("/api/v1/mesh", meshRoutes);
 app.route("/api/v1/schema", schemaRoutes);
 app.route("/api/v1/weld-jobs", weldJobRoutes);
+app.route("/api/v1/procedures", procedureRoutes);
 
 
 const staticDir = resolve(process.env.STATIC_DIR || join(import.meta.dir, "../../frontend/dist"));

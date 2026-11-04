@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Logo } from "./Logo";
 import { LocalOnlyChip } from "./components/LocalOnlyChip";
 import { PartChip } from "./components/PartChip";
+import { WorkControls } from "./components/WorkControls";
 import { useStore } from "../state/store";
 import type { Step } from "../state/store";
 import { PanelLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
@@ -45,13 +46,16 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
           </button>
         </div>
         <PartChip />
-        <LocalOnlyChip />
+        <div className="planner-topbar-group">
+          <WorkControls />
+          <LocalOnlyChip />
+        </div>
       </header>
       <aside id="planner-panel" className="planner-panel" aria-hidden={collapsed}>
         <ol className="planner-steps" aria-label="Steps">
           {STEPS.map((s, idx) => {
             const isActive = step === s.id;
-            const isLocked = s.id !== "part" && (!checked || !frame.confirmed);
+            const isLocked = s.id !== "part" && !checked;
             return (
               <li key={s.id}>
                 <button
@@ -59,7 +63,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
                   className={`planner-step${isActive ? " planner-step-active" : ""}${isLocked ? " planner-step-locked" : ""}`}
                   aria-current={isActive ? "step" : undefined}
                   aria-disabled={isLocked}
-                  title={isLocked ? (checked ? "Confirm units and up axis first" : "Load a part first") : undefined}
+                  title={isLocked ? "Load a part first" : undefined}
                   onClick={() => { if (!isLocked) setStep(s.id); }}
                   disabled={isLocked}
                 >
