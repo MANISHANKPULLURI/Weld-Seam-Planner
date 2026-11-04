@@ -31,8 +31,9 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
       <header className="planner-topbar">
         <div className="planner-topbar-group">
           <a href="#/" className="planner-topbar-left">
-            <Logo size={22} />
-            <span className="planner-wordmark">Weld planner</span>
+            <Logo height={14} />
+            <span className="brand-divider" aria-hidden="true" />
+            <span className="planner-wordmark">Weld Seam Planner</span>
           </a>
           <button type="button" className="planner-collapse-btn" aria-expanded={!collapsed} aria-controls="planner-panel" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? "Open settings panel" : "Close settings panel"}>
             {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}

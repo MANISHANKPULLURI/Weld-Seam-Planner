@@ -1,13 +1,21 @@
-docs
+# planning / reference docs (local only)
+docs/
+
 # dotenv
 .env
 .env.*
+!.env.example
 
-# keep self-hosted fonts and images (required by spec)
-!frontend/public/fonts/
-!frontend/public/fonts/**
-!frontend/src/assets/
-!frontend/src/assets/**
+# Armatrix brand pack (local only): logo system, colour system, fonts
+frontend/src/assets/*
+!frontend/src/assets/hero.png
+frontend/src/assets/02 Logo System/
+frontend/src/assets/Armatrix_master_file.jpg
+frontend/public/fonts/
+
+# macOS metadata
+.DS_Store
+._*
 
 node_modules
 dist

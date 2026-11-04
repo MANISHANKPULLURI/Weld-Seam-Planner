@@ -1,6 +1,7 @@
 import { useStore } from "../state/store";
+import type { Health } from "../domain/mesh/health";
 
-const API_BASE = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
@@ -25,14 +26,16 @@ function toHealth(raw: {
   bodies: number;
   openEdges: number;
   nonManifold?: number;
+  flippedFaces?: number;
   bounds: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number }; size: { x: number; y: number; z: number } };
-}) {
+}): Health {
   return {
     triangles: raw.triangles,
     bodies: raw.bodies,
     openEdges: raw.openEdges,
+    nonManifold: raw.nonManifold ?? 0,
+    flippedFaces: raw.flippedFaces ?? 0,
     bounds: raw.bounds,
-    hasFlippedFaces: false,
   };
 }
 

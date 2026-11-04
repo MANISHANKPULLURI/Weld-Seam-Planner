@@ -1,15 +1,13 @@
 # backend
 
-To install dependencies:
+Bun + Hono API for the Weld Seam Planner.
 
 ```bash
 bun install
+cp .env.example .env
+bun run dev        # http://localhost:8000, hot reload
+bun test           # API, orientation and upload-security tests
+bun run check      # typecheck
 ```
 
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.3.14. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+In production the same process also serves `frontend/dist` (see the root `Dockerfile`).

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { UploadIcon, AlertIcon } from "../icons";
-import { analyseFile } from "../../lib/meshClient";
+import { analyseFile, analyseFileFromFile } from "../../lib/meshClient";
 import { createSampleStl } from "../../domain/mesh/sample";
 
 export function DropZone() {
@@ -14,7 +14,7 @@ export function DropZone() {
     if (file.size === 0) { setError("No triangles found. This doesn't look like an STL file."); return; }
     setError(null);
     if (file.size > 5 * 1024 * 1024) {
-      import("../../lib/meshClient").then(({ analyseFileFromFile }) => analyseFileFromFile(file).catch(() => setError("This file doesn't look like a valid STL.")));
+      analyseFileFromFile(file).catch(() => setError("This file doesn't look like a valid STL."));
     } else {
       file.arrayBuffer().then((buf) => analyseFile(buf, file.name)).catch(() => setError("This file doesn't look like a valid STL."));
     }

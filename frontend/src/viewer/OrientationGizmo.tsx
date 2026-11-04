@@ -82,7 +82,7 @@ export function OrientationGizmo({ controller, onView }: Props) {
         ctx.fillText(a.label, px, py - 9);
       }
       ctx.globalAlpha = 1;
-      ctx.fillStyle = isLight ? "#283B1F" : "#EF7F01";
+      ctx.fillStyle = isLight ? "#2B381F" : "#E97F01";
       ctx.beginPath();
       ctx.arc(cx, cy, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -133,7 +133,7 @@ export function OrientationGizmo({ controller, onView }: Props) {
         height={72}
         className="orientation-gizmo-canvas"
         onClick={handleClick}
-        aria-label="Orientation gizmo — click to switch view"
+        aria-label="Orientation gizmo. Click an axis to switch view"
         title="Click to switch standard view (center = isometric)"
         style={{ display: "block", cursor: "pointer" }}
       />

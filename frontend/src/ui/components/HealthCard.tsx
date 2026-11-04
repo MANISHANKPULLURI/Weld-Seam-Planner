@@ -1,7 +1,61 @@
 import { useStore } from "../../state/store";
 import { CheckIcon, AlertIcon } from "../icons";
-import { describeHealth } from "../../domain/mesh/describe";
+import { formatCount, formatSize, healthChecks } from "../../domain/mesh/describe";
 import { REPAIR_AVAILABLE } from "../../domain/mesh/repair";
+import { createSampleStl } from "../../domain/mesh/sample";
+import { analyseFile, repairFile } from "../../lib/meshClient";
+import type { Health } from "../../domain/mesh/health";
+
+function downloadRepaired() {
+  const { repairedBinary, mesh } = useStore.getState();
+  let data = repairedBinary;
+  if (!data && mesh) {
+    const count = mesh.indices.length / 3;
+    data = new ArrayBuffer(84 + count * 50);
+    const view = new DataView(data);
+    view.setUint32(80, count, true);
+    let off = 84;
+    for (let i = 0; i < count; i++) {
+      off += 12;
+      for (let k = 0; k < 3; k++) {
+        const idx = mesh.indices[i * 3 + k]! * 3;
+        view.setFloat32(off, mesh.positions[idx]!, true); view.setFloat32(off + 4, mesh.positions[idx + 1]!, true); view.setFloat32(off + 8, mesh.positions[idx + 2]!, true); off += 12;
+      }
+      off += 2;
+    }
+  }
+  if (!data) return;
+  const url = URL.createObjectURL(new Blob([data], { type: "model/stl" }));
+  const el = document.createElement("a");
+  el.href = url;
+  el.download = "repaired.stl";
+  el.click();
+  URL.revokeObjectURL(url);
+}
+
+function Summary({ health }: { health: Health }) {
+  return (
+    <dl className="health-summary">
+      <div><dt>Triangles</dt><dd className="numeric">{formatCount(health.triangles)}</dd></div>
+      <div><dt>Size <span className="health-unit">model units</span></dt><dd className="numeric">{formatSize(health.bounds.size)}</dd></div>
+    </dl>
+  );
+}
+
+function Checks({ health }: { health: Health }) {
+  return (
+    <ul className="health-checks" aria-label="Mesh checks">
+      {healthChecks(health).map((c) => (
+        <li key={c.id} className={`health-check${c.ok ? " health-check-ok" : " health-check-warn"}`}>
+          <span className="health-check-icon" aria-hidden="true">{c.ok ? <CheckIcon size={12} /> : <AlertIcon size={12} />}</span>
+          <span className="health-check-label">{c.label}</span>
+          <span className="health-check-value numeric">{formatCount(c.value)}</span>
+          {!c.ok && <span className="health-check-hint">{c.hint}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function HealthCard() {
   const health = useStore((s) => s.health);
@@ -16,108 +70,78 @@ export function HealthCard() {
 
   if (phase === "error") {
     return (
-      <div className="result-card" role="alert">
-        <div className="result-title"><AlertIcon /> Mesh check</div>
-        <div className="result-danger-text">{error}</div>
+      <section className="result-card" role="alert">
+        <header className="result-header">
+          <span className="result-title"><AlertIcon /> Mesh check</span>
+          <span className="status-badge status-badge-danger">Failed</span>
+        </header>
+        <p className="result-danger-text">{error}</p>
         <div className="result-actions">
           <button type="button" className="btn-primary" onClick={loadAnother}>Try another file</button>
-          <button type="button" className="btn-ghost" onClick={async () => { const { createSampleStl } = await import("../../domain/mesh/sample"); const { analyseFile } = await import("../../lib/meshClient"); analyseFile(createSampleStl(), "sample.stl"); }}>Load sample part</button>
+          <button type="button" className="btn-secondary" onClick={() => analyseFile(createSampleStl(), "sample.stl")}>Load sample part</button>
         </div>
-      </div>
+      </section>
     );
   }
 
   if (!health || !verdict || typeof health.triangles !== "number") return null;
 
-  if (repaired && originalHealth && typeof originalHealth.triangles === "number") {
-    const download = () => {
-      const binary = useStore.getState().repairedBinary;
-      if (binary) {
-        const blob = new Blob([binary], { type: "model/stl" });
-        const url = URL.createObjectURL(blob);
-        const el = document.createElement("a"); el.href = url; el.download = "repaired.stl"; el.click(); URL.revokeObjectURL(url);
-        return;
-      }
-      const m = useStore.getState().mesh;
-      if (!m) return;
-      const count = m.indices.length / 3;
-      const buf = new ArrayBuffer(84 + count * 50);
-      const view = new DataView(buf);
-      view.setUint32(80, count, true);
-      let off = 84;
-      for (let i = 0; i < count; i++) {
-        view.setFloat32(off, 0, true); view.setFloat32(off+4, 0, true); view.setFloat32(off+8, 1, true); off+=12;
-        for (let k = 0; k < 3; k++) {
-          const idx = m.indices[i*3+k]!*3;
-          view.setFloat32(off, m.positions[idx]!, true); view.setFloat32(off+4, m.positions[idx+1]!, true); view.setFloat32(off+8, m.positions[idx+2]!, true); off+=12;
-        }
-        view.setUint16(off, 0, true); off+=2;
-      }
-      const blob = new Blob([buf], { type: "model/stl" });
-      const url = URL.createObjectURL(blob);
-      const el = document.createElement("a"); el.href = url; el.download = "repaired.stl"; el.click(); URL.revokeObjectURL(url);
-    };
+  if (repaired && originalHealth) {
+    const before = healthChecks(originalHealth);
+    const after = healthChecks(health);
     return (
-      <div className="result-card">
-        <div className="result-title"><CheckIcon /> Mesh check</div>
+      <section className="result-card">
+        <header className="result-header">
+          <span className="result-title"><CheckIcon /> Mesh check</span>
+          <span className="status-badge status-badge-ok">Repaired</span>
+        </header>
         <table className="repaired-table">
-          <thead><tr><th></th><th>Before</th><th>After</th></tr></thead>
+          <thead><tr><th scope="col">Check</th><th scope="col">Before</th><th scope="col">After</th></tr></thead>
           <tbody>
-            <tr><td>Open edges</td><td>{originalHealth.openEdges}</td><td className={originalHealth.openEdges !== health.openEdges ? "changed" : ""}>{originalHealth.openEdges !== health.openEdges ? `→ ${health.openEdges}` : health.openEdges}</td></tr>
-            <tr><td>Bodies</td><td>{originalHealth.bodies}</td><td className={originalHealth.bodies !== health.bodies ? "changed" : ""}>{originalHealth.bodies !== health.bodies ? `→ ${health.bodies}` : health.bodies}</td></tr>
-            <tr><td>Triangles</td><td>{originalHealth.triangles}</td><td className={originalHealth.triangles !== health.triangles ? "changed" : ""}>{originalHealth.triangles !== health.triangles ? `→ ${health.triangles}` : health.triangles}</td></tr>
+            <tr>
+              <th scope="row">Triangles</th>
+              <td className="numeric">{formatCount(originalHealth.triangles)}</td>
+              <td className={`numeric${originalHealth.triangles !== health.triangles ? " changed" : ""}`}>{formatCount(health.triangles)}</td>
+            </tr>
+            {before.map((b, i) => (
+              <tr key={b.id}>
+                <th scope="row">{b.label}</th>
+                <td className="numeric">{formatCount(b.value)}</td>
+                <td className={`numeric${b.value !== after[i]!.value ? " changed" : ""}`}>{formatCount(after[i]!.value)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
-        <div className="result-explainer">Repaired copy in use. Your original file is unchanged.</div>
-        <div className="result-actions">
+        <p className="result-explainer">You are working on a repaired copy. The original file is unchanged.</p>
+        <div className="result-actions result-actions-split">
+          <button type="button" className="btn-secondary" onClick={downloadRepaired}>Download STL</button>
           <button type="button" className="btn-primary" onClick={() => setStep("seams")}>Continue to seams</button>
-          <button type="button" className="btn-secondary" onClick={download}>Download repaired STL</button>
-          <button type="button" className="btn-ghost" onClick={undoRepair}>Undo repair</button>
         </div>
-      </div>
+        <button type="button" className="btn-link" onClick={undoRepair}>Undo repair</button>
+      </section>
     );
   }
 
-  const notes = describeHealth(health);
-  const size = health.bounds.size;
-
-  if (verdict === "pass") {
-    return (
-      <div className="result-card">
-        <div className="result-title"><CheckIcon /> Mesh check</div>
-        <div className="result-secondary">No structural problems found.</div>
-        <div className="result-rows">
-          <div className="result-row"><span>Triangles</span><strong className="numeric">{health.triangles}</strong></div>
-          <div className="result-row"><span>Bodies</span><strong className="numeric">{health.bodies}</strong></div>
-          <div className="result-row"><span>Open edges</span><strong className="numeric">{health.openEdges}</strong></div>
-          <div className="result-row"><span>Size</span><strong className="numeric">{size.x.toFixed(2)} × {size.y.toFixed(2)} × {size.z.toFixed(2)} model units</strong></div>
-        </div>
-        <div className="result-actions">
-          <button type="button" className="btn-primary" onClick={() => setStep("seams")}>Continue to seams</button>
-          <button type="button" className="btn-secondary" onClick={loadAnother}>Load another</button>
-        </div>
-      </div>
-    );
-  }
+  const pass = verdict === "pass";
 
   return (
-    <div className="result-card">
-      <div className="result-title"><AlertIcon /> Mesh check</div>
-      <div className="result-warning-text">Review these before planning.</div>
-      <div className="result-rows">
-        <div className={`result-row${health.openEdges > 0 ? " result-row-warning" : ""}`}><span>Triangles</span><strong className="numeric">{health.triangles}</strong></div>
-        <div className={`result-row${health.bodies > 1 ? " result-row-warning" : ""}`}><span>Bodies</span><strong className="numeric">{health.bodies}</strong></div>
-        <div className={`result-row${health.openEdges > 0 ? " result-row-warning" : ""}`}><span>Open edges</span><strong className="numeric">{health.openEdges}</strong></div>
-        <div className="result-row"><span>Size</span><strong className="numeric">{size.x.toFixed(2)} × {size.y.toFixed(2)} × {size.z.toFixed(2)} model units</strong></div>
+    <section className="result-card">
+      <header className="result-header">
+        <span className="result-title">{pass ? <CheckIcon /> : <AlertIcon />} Mesh check</span>
+        <span className={`status-badge ${pass ? "status-badge-ok" : "status-badge-warn"}`}>{pass ? "Ready" : "Needs review"}</span>
+      </header>
+      <Summary health={health} />
+      <Checks health={health} />
+      {!pass && (
+        <p className="result-explainer">
+          Repair turns flipped faces outward and fills holes. Skip it if the openings are intentional, such as nozzles or manholes.
+        </p>
+      )}
+      <div className="result-actions result-actions-split">
+        {!pass && REPAIR_AVAILABLE && <button type="button" className="btn-secondary" onClick={() => void repairFile()}>Repair</button>}
+        <button type="button" className="btn-primary" onClick={() => setStep("seams")}>{pass ? "Continue to seams" : "Continue as is"}</button>
       </div>
-      {notes.length > 0 && <div className="result-notes">{notes.map((n) => <div key={n}>{n}</div>)}</div>}
-      <div className="result-explainer">Open edges can be intentional, like a nozzle or a manhole. Repair only if this part should be closed.</div>
-      {!REPAIR_AVAILABLE && <div className="result-muted">Automatic repair isn't available yet.</div>}
-      <div className="result-actions">
-        {REPAIR_AVAILABLE && <button type="button" className="btn-secondary" onClick={async () => { const { repairFile } = await import("../../lib/meshClient"); await repairFile(); }}>Repair</button>}
-        <button type="button" className="btn-primary" onClick={() => setStep("seams")}>Continue as is</button>
-        <button type="button" className="btn-ghost" onClick={loadAnother}>Load another</button>
-      </div>
-    </div>
+      <button type="button" className="btn-link" onClick={loadAnother}>Load another file</button>
+    </section>
   );
 }

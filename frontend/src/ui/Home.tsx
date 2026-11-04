@@ -1,5 +1,5 @@
 import { Logo } from "./Logo";
-import { LockIcon } from "./icons";
+import { UploadIcon } from "./icons";
 
 export function Home() {
   const toggle = () => {
@@ -11,8 +11,9 @@ export function Home() {
     <div className="home-root">
       <header className="home-header">
         <div className="home-header-left">
-          <Logo size={28} />
-          <span className="home-logo-wordmark">Weld planner</span>
+          <span className="home-logo"><Logo height={18} /></span>
+          <span className="brand-divider" aria-hidden="true" />
+          <span className="home-logo-wordmark">Weld Seam Planner</span>
         </div>
         <button type="button" className="planner-collapse-btn" onClick={toggle}>Toggle theme</button>
       </header>
@@ -39,8 +40,8 @@ export function Home() {
             </div>
           </div>
           <div className="home-privacy">
-            <LockIcon size={14} />
-            Your file stays in your browser. Nothing is uploaded.
+            <UploadIcon size={14} />
+            Your STL is sent to the planner server to be checked, then deleted. Nothing is stored.
           </div>
           <svg className="home-deco" viewBox="0 0 640 48" fill="none" aria-hidden="true">
             <path d="M0 36H240M240 8V36M240 20H360M360 8V36" stroke="var(--rev-green-t3)" strokeWidth={1.4} />

@@ -1,0 +1,15 @@
+.git
+.github
+docs
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/.DS_Store
+**/._*
+backend/tests
+frontend/tests
+frontend/src/assets/02 Logo System
+frontend/src/assets/Armatrix_master_file.jpg
+Dockerfile
+fly.toml

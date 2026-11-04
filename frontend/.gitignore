@@ -15,12 +15,12 @@ dist-ssr
 # dotenv
 .env
 .env.*
+!.env.example
 
-# keep self-hosted fonts and images (required by spec)
-!public/fonts/
-!public/fonts/**
-!src/assets/
-!src/assets/**
+# Armatrix brand pack (local only): logo system, colour system, fonts
+src/assets/*
+!src/assets/hero.png
+public/fonts/
 
 # Editor directories and files
 .vscode/*

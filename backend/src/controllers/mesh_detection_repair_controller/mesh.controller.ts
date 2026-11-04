@@ -1,203 +1,149 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { z } from "zod";
 import { MeshError } from "./types.ts";
-import { runRepairPipeline, runValidationPipeline } from "./pipeline.ts";
-import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { DEFAULT_WELD_TOLERANCE, runRepairPipeline, runValidationPipeline } from "./pipeline.ts";
+import { mkdir, writeFile, readFile, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
 
-const MAX_FILE_BYTES = Number(process.env.MAX_FILE_MB || 500) * 1024 * 1024;
-const CHUNK_BYTES = 5 * 1024 * 1024;
-const UPLOAD_DIR = "/tmp/weld-uploads";
+export const MAX_FILE_BYTES = Number(process.env.MAX_FILE_MB || 500) * 1024 * 1024;
+export const CHUNK_BYTES = 5 * 1024 * 1024;
+export const UPLOAD_DIR = process.env.UPLOAD_DIR || join(tmpdir(), "weld-uploads");
+
+const UPLOAD_TTL_MS = Number(process.env.UPLOAD_TTL_MIN || 30) * 60 * 1000;
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+const UPLOAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const CHUNK_INDEX_PATTERN = /^\d{1,6}$/;
+
+const toleranceSchema = z.coerce.number().min(1e-9).max(1e-2).optional();
+
+type UploadMeta = { fileSize: number; totalChunks: number; createdAt: number };
 
 export const meshRoutes = new Hono();
 
 
-meshRoutes.post("/validate", async (c) => {
+function tooLarge() {
+  return `File too large. Max ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB.`;
+}
+
+
+async function readMeshBody(c: Context): Promise<ArrayBuffer | Response> {
 
   const contentType = c.req.header("content-type") || "";
-
-  let buffer: ArrayBuffer | null = null;
 
   if (contentType.includes("multipart/form-data")) {
 
     const form = await c.req.formData();
-
     const file = form.get("file");
 
-    if (!(file instanceof File)) {
-      return c.json({ error: "file field is required" }, 400);
-    }
+    if (!(file instanceof File)) return c.json({ error: "file field is required" }, 400);
+    if (file.size === 0) return c.json({ error: "Empty file" }, 400);
+    if (file.size > MAX_FILE_BYTES) return c.json({ error: tooLarge() }, 413);
 
-    if (file.size > MAX_FILE_BYTES) {
-      return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES/1024/1024)}MB.` }, 413);
-    }
-
-    buffer = await file.arrayBuffer();
-
-  } else {
-
-    const raw = await c.req.arrayBuffer();
-
-    if (raw.byteLength === 0) {
-      return c.json({ error: "Empty file" }, 400);
-    }
-
-    if (raw.byteLength > MAX_FILE_BYTES) {
-      return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES/1024/1024)}MB.` }, 413);
-    }
-
-    buffer = raw;
+    return await file.arrayBuffer();
   }
 
-  if (!buffer) {
-    return c.json({ error: "Empty file" }, 400);
-  }
+  const raw = await c.req.arrayBuffer();
+
+  if (raw.byteLength === 0) return c.json({ error: "Empty file" }, 400);
+  if (raw.byteLength > MAX_FILE_BYTES) return c.json({ error: tooLarge() }, 413);
+
+  return raw;
+}
+
+
+function readTolerance(c: Context): number | null {
+
+  const parsed = toleranceSchema.safeParse(c.req.query("tolerance"));
+
+  if (!parsed.success) return null;
+
+  return parsed.data ?? DEFAULT_WELD_TOLERANCE;
+}
+
+
+function meshErrorResponse(c: Context, err: unknown, fallback: string) {
+
+  if (err instanceof MeshError || err instanceof Error) return c.json({ error: err.message }, 422);
+
+  return c.json({ error: fallback }, 422);
+}
+
+
+function validationBody(result: ReturnType<typeof runValidationPipeline>) {
+  return {
+    health: result.health,
+    mesh: {
+      positions: Array.from(result.welded.uniqueVertices),
+      indices: Array.from(result.welded.indexArray),
+      triangles: result.health.triangles,
+    },
+    repairable: !result.health.isManifoldSolid || result.health.flippedFaces > 0,
+  };
+}
+
+
+function repairBody(result: ReturnType<typeof runRepairPipeline>) {
+  return {
+    health: result.health,
+    mesh: {
+      positions: Array.from(result.welded.uniqueVertices),
+      indices: Array.from(result.welded.indexArray),
+      triangles: result.health.triangles,
+    },
+    stats: result.stats,
+    repaired: true,
+    binaryBase64: Buffer.from(result.binary).toString("base64"),
+  };
+}
+
+
+meshRoutes.post("/validate", async (c) => {
+
+  const tolerance = readTolerance(c);
+  if (tolerance === null) return c.json({ error: "Invalid tolerance" }, 400);
+
+  const buffer = await readMeshBody(c);
+  if (buffer instanceof Response) return buffer;
 
   try {
-
-    const result = runValidationPipeline(buffer);
-
-    const positions = Array.from(result.welded.uniqueVertices);
-    const indices = Array.from(result.welded.indexArray);
-
-    return c.json({
-      health: result.health,
-      mesh: {
-        positions,
-        indices,
-        triangles: result.health.triangles,
-      },
-      repairable: !result.health.isManifoldSolid,
-    });
-
+    return c.json(validationBody(runValidationPipeline(buffer, tolerance)));
   } catch (err) {
-
-    if (err instanceof MeshError) {
-      return c.json({ error: err.message }, 422);
-    }
-
-    if (err instanceof Error) {
-      return c.json({ error: err.message }, 422);
-    }
-
-    return c.json({ error: "Invalid mesh" }, 422);
+    return meshErrorResponse(c, err, "Invalid mesh");
   }
 });
 
 
 meshRoutes.post("/repair", async (c) => {
 
-  const contentType = c.req.header("content-type") || "";
+  const tolerance = readTolerance(c);
+  if (tolerance === null) return c.json({ error: "Invalid tolerance" }, 400);
 
-  let buffer: ArrayBuffer | null = null;
-
-  if (contentType.includes("multipart/form-data")) {
-
-    const form = await c.req.formData();
-    const file = form.get("file");
-
-    if (!(file instanceof File)) {
-      return c.json({ error: "file field is required" }, 400);
-    }
-
-    if (file.size > MAX_FILE_BYTES) {
-      return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES/1024/1024)}MB.` }, 413);
-    }
-
-    buffer = await file.arrayBuffer();
-
-  } else {
-
-    const raw = await c.req.arrayBuffer();
-
-    if (raw.byteLength === 0) {
-      return c.json({ error: "Empty file" }, 400);
-    }
-
-    if (raw.byteLength > MAX_FILE_BYTES) {
-      return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES/1024/1024)}MB.` }, 413);
-    }
-
-    buffer = raw;
-  }
-
-  if (!buffer) {
-    return c.json({ error: "Empty file" }, 400);
-  }
-
-  const repairSchema = z.object({
-    tolerance: z.coerce.number().min(1e-9).max(1e-2).optional(),
-  });
-
-  const query = repairSchema.safeParse({
-    tolerance: c.req.query("tolerance"),
-  });
-
-  if (!query.success) {
-    return c.json({ error: "Invalid tolerance" }, 400);
-  }
+  const buffer = await readMeshBody(c);
+  if (buffer instanceof Response) return buffer;
 
   try {
-
-    const result = runRepairPipeline(buffer);
-
-    const positions = Array.from(result.welded.uniqueVertices);
-    const indices = Array.from(result.welded.indexArray);
-
-    const binaryBase64 = Buffer.from(result.binary).toString("base64");
-
-    return c.json({
-      health: result.health,
-      mesh: {
-        positions,
-        indices,
-        triangles: result.health.triangles,
-      },
-      stats: result.stats,
-      repaired: true,
-      binaryBase64,
-    });
-
+    return c.json(repairBody(runRepairPipeline(buffer, tolerance)));
   } catch (err) {
-
-    if (err instanceof MeshError) {
-      return c.json({ error: err.message }, 422);
-    }
-
-    if (err instanceof Error) {
-      return c.json({ error: err.message }, 422);
-    }
-
-    return c.json({ error: "Repair failed" }, 422);
+    return meshErrorResponse(c, err, "Repair failed");
   }
 });
 
 
 meshRoutes.post("/repair/binary", async (c) => {
 
-  const contentType = c.req.header("content-type") || "";
-  let buffer: ArrayBuffer | null = null;
+  const tolerance = readTolerance(c);
+  if (tolerance === null) return c.json({ error: "Invalid tolerance" }, 400);
 
-  if (contentType.includes("multipart/form-data")) {
-    const form = await c.req.formData();
-    const file = form.get("file");
-    if (!(file instanceof File)) return c.json({ error: "file field is required" }, 400);
-    if (file.size > MAX_FILE_BYTES) return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES/1024/1024)}MB.` }, 413);
-    buffer = await file.arrayBuffer();
-  } else {
-    const raw = await c.req.arrayBuffer();
-    if (raw.byteLength === 0) return c.json({ error: "Empty file" }, 400);
-    if (raw.byteLength > MAX_FILE_BYTES) return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES/1024/1024)}MB.` }, 413);
-    buffer = raw;
-  }
-
-  if (!buffer) return c.json({ error: "Empty file" }, 400);
+  const buffer = await readMeshBody(c);
+  if (buffer instanceof Response) return buffer;
 
   try {
 
-    const result = runRepairPipeline(buffer);
+    const result = runRepairPipeline(buffer, tolerance);
 
     return new Response(result.binary, {
       headers: {
@@ -207,28 +153,36 @@ meshRoutes.post("/repair/binary", async (c) => {
     });
 
   } catch (err) {
-
-    if (err instanceof MeshError) return c.json({ error: err.message }, 422);
-    return c.json({ error: "Repair failed" }, 422);
+    return meshErrorResponse(c, err, "Repair failed");
   }
 });
+
+
+async function readUploadMeta(id: string): Promise<UploadMeta | null> {
+
+  try {
+    return JSON.parse(await readFile(join(UPLOAD_DIR, id, "meta.json"), "utf-8")) as UploadMeta;
+  } catch {
+    return null;
+  }
+}
 
 
 meshRoutes.post("/upload/init", async (c) => {
 
   const body = await c.req.json().catch(() => null) as { fileName?: string; fileSize?: number } | null;
 
-  if (!body || typeof body.fileSize !== "number") {
+  if (!body || typeof body.fileSize !== "number" || !Number.isInteger(body.fileSize) || body.fileSize <= 0) {
     return c.json({ error: "fileSize required" }, 400);
   }
 
-  if (body.fileSize > MAX_FILE_BYTES) {
-    return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB.` }, 413);
-  }
+  if (body.fileSize > MAX_FILE_BYTES) return c.json({ error: tooLarge() }, 413);
 
   const uploadId = randomUUID();
+  const meta: UploadMeta = { fileSize: body.fileSize, totalChunks: Math.ceil(body.fileSize / CHUNK_BYTES), createdAt: Date.now() };
 
   await mkdir(join(UPLOAD_DIR, uploadId), { recursive: true });
+  await writeFile(join(UPLOAD_DIR, uploadId, "meta.json"), JSON.stringify(meta));
 
   return c.json({ uploadId, chunkSize: CHUNK_BYTES });
 });
@@ -237,29 +191,25 @@ meshRoutes.post("/upload/init", async (c) => {
 meshRoutes.post("/upload/:id/chunk", async (c) => {
 
   const id = c.req.param("id");
-  const index = c.req.query("index");
+  const indexParam = c.req.query("index") ?? "";
 
-  if (!id || index === undefined) {
-    return c.json({ error: "id and index required" }, 400);
-  }
+  if (!UPLOAD_ID_PATTERN.test(id)) return c.json({ error: "Invalid upload id" }, 400);
+  if (!CHUNK_INDEX_PATTERN.test(indexParam)) return c.json({ error: "Invalid chunk index" }, 400);
+
+  const meta = await readUploadMeta(id);
+  if (!meta) return c.json({ error: "Upload not found" }, 404);
+
+  const index = Number(indexParam);
+  if (index >= meta.totalChunks) return c.json({ error: "Invalid chunk index" }, 400);
 
   const chunk = await c.req.arrayBuffer();
 
-  if (chunk.byteLength === 0) {
-    return c.json({ error: "Empty chunk" }, 400);
-  }
+  if (chunk.byteLength === 0) return c.json({ error: "Empty chunk" }, 400);
+  if (chunk.byteLength > CHUNK_BYTES) return c.json({ error: "Chunk too large" }, 413);
 
-  if (chunk.byteLength > CHUNK_BYTES + 1024) {
-    return c.json({ error: "Chunk too large" }, 413);
-  }
+  await writeFile(join(UPLOAD_DIR, id, `${index}.part`), Buffer.from(chunk));
 
-  const dir = join(UPLOAD_DIR, id);
-  const path = join(dir, `${index}.part`);
-
-  await mkdir(dir, { recursive: true });
-  await writeFile(path, Buffer.from(chunk));
-
-  return c.json({ ok: true, index: Number(index) });
+  return c.json({ ok: true, index });
 });
 
 
@@ -268,73 +218,72 @@ meshRoutes.post("/upload/:id/complete", async (c) => {
   const id = c.req.param("id");
   const mode = c.req.query("mode") || "validate";
 
-  if (!id) return c.json({ error: "id required" }, 400);
+  if (!UPLOAD_ID_PATTERN.test(id)) return c.json({ error: "Invalid upload id" }, 400);
+  if (mode !== "validate" && mode !== "repair") return c.json({ error: "Invalid mode" }, 400);
+
+  const tolerance = readTolerance(c);
+  if (tolerance === null) return c.json({ error: "Invalid tolerance" }, 400);
+
+  const meta = await readUploadMeta(id);
+  if (!meta) return c.json({ error: "Upload not found" }, 404);
 
   const dir = join(UPLOAD_DIR, id);
-
-  let files: string[] = [];
-
-  try {
-    const { readdir } = await import("node:fs/promises");
-    files = await readdir(dir);
-  } catch {
-    return c.json({ error: "Upload not found" }, 404);
-  }
-
-  const parts = files.filter((f) => f.endsWith(".part")).sort((a, b) => Number(a.split(".")[0]) - Number(b.split(".")[0]));
-
-  if (parts.length === 0) return c.json({ error: "No chunks" }, 400);
-
   const buffers: Buffer[] = [];
 
-  for (const p of parts) {
-    const buf = await readFile(join(dir, p));
-    buffers.push(buf);
+  for (let i = 0; i < meta.totalChunks; i++) {
+    try {
+      buffers.push(await readFile(join(dir, `${i}.part`)));
+    } catch {
+      return c.json({ error: `Missing chunk ${i}` }, 400);
+    }
   }
 
   const assembled = Buffer.concat(buffers);
 
-  if (assembled.byteLength > MAX_FILE_BYTES) {
+  if (assembled.byteLength !== meta.fileSize) {
     await rm(dir, { recursive: true, force: true });
-    return c.json({ error: `File too large. Max ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB.` }, 413);
+    return c.json({ error: "Uploaded size does not match the declared file size" }, 400);
   }
 
   const buffer = assembled.buffer.slice(assembled.byteOffset, assembled.byteOffset + assembled.byteLength) as ArrayBuffer;
 
   try {
-
-    if (mode === "repair") {
-
-      const result = runRepairPipeline(buffer);
-      const positions = Array.from(result.welded.uniqueVertices);
-      const indices = Array.from(result.welded.indexArray);
-      const binaryBase64 = Buffer.from(result.binary).toString("base64");
-      await rm(dir, { recursive: true, force: true });
-      return c.json({
-        health: result.health,
-        mesh: { positions, indices, triangles: result.health.triangles },
-        stats: result.stats,
-        repaired: true,
-        binaryBase64,
-      });
-    }
-
-    const result = runValidationPipeline(buffer);
-    const positions = Array.from(result.welded.uniqueVertices);
-    const indices = Array.from(result.welded.indexArray);
-    await rm(dir, { recursive: true, force: true });
-    return c.json({
-      health: result.health,
-      mesh: { positions, indices, triangles: result.health.triangles },
-      repairable: !result.health.isManifoldSolid,
-    });
-
+    const body = mode === "repair" ? repairBody(runRepairPipeline(buffer, tolerance)) : validationBody(runValidationPipeline(buffer, tolerance));
+    return c.json(body);
   } catch (err) {
-
+    return meshErrorResponse(c, err, "Processing failed");
+  } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
-
-    if (err instanceof MeshError) return c.json({ error: err.message }, 422);
-    if (err instanceof Error) return c.json({ error: err.message }, 422);
-    return c.json({ error: "Processing failed" }, 422);
   }
 });
+
+
+export async function sweepExpiredUploads(now = Date.now(), ttlMs = UPLOAD_TTL_MS) {
+
+  let removed = 0;
+  let entries: string[] = [];
+
+  try {
+    entries = await readdir(UPLOAD_DIR);
+  } catch {
+    return removed;
+  }
+
+  for (const entry of entries) {
+
+    if (!UPLOAD_ID_PATTERN.test(entry)) continue;
+
+    const dir = join(UPLOAD_DIR, entry);
+    const info = await stat(dir).catch(() => null);
+
+    if (info && now - info.mtimeMs > ttlMs) {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+      removed++;
+    }
+  }
+
+  return removed;
+}
+
+
+setInterval(() => { void sweepExpiredUploads(); }, SWEEP_INTERVAL_MS).unref();

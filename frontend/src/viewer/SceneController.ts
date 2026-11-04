@@ -137,8 +137,8 @@ export class SceneController {
     const extent = Math.max(interval * 4, Math.ceil(rawExtent / interval) * interval);
     const divisions = Math.max(4, Math.min(40, Math.round(extent / interval)));
     const size = extent;
-    const main = new THREE.Color(cssVar("--grid-main") || cssVar("--rev-green-t3") || "#465B32");
-    const sub = new THREE.Color(cssVar("--grid-sub") || cssVar("--rev-green") || "#283B1F");
+    const main = new THREE.Color(cssVar("--grid-main") || cssVar("--rev-green-t3") || "#455B32");
+    const sub = new THREE.Color(cssVar("--grid-sub") || cssVar("--rev-green") || "#2B381F");
     const g = new THREE.GridHelper(size, divisions, main, sub);
     g.rotation.x = Math.PI / 2;
     this.grid.add(g);
@@ -249,7 +249,7 @@ export class SceneController {
       if (!this.triangleEdges) {
         const geo = this.mesh.geometry as THREE.BufferGeometry;
         const edges = new THREE.EdgesGeometry(geo, 1);
-        const lineMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01", transparent: true, opacity: 0.95, linewidth: 1 });
+        const lineMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#E97F01", transparent: true, opacity: 0.95, linewidth: 1 });
         this.triangleEdges = new THREE.LineSegments(edges, lineMat);
         this.scene.add(this.triangleEdges);
       }
@@ -261,7 +261,7 @@ export class SceneController {
       this.triangleEdges.visible = false;
     }
     const solidColor = cssVar("--part-solid") || (document.documentElement.getAttribute("data-theme")==="light" ? "#141E00" : "#C5C5BD");
-    const wireColor = cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01";
+    const wireColor = cssVar("--bright-discovery") || cssVar("--discovery") || "#E97F01";
     mat.color = new THREE.Color(mode === "wireframe" ? wireColor : solidColor);
     if (this.triangleEdges) {
       (this.triangleEdges.material as THREE.LineBasicMaterial).color = new THREE.Color(wireColor);
@@ -282,7 +282,7 @@ export class SceneController {
     this.buildGridForBounds(this.bounds);
     this.buildAxesForBounds(this.bounds);
     if (this.triangleEdges) {
-      (this.triangleEdges.material as THREE.LineBasicMaterial).color = new THREE.Color(cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01");
+      (this.triangleEdges.material as THREE.LineBasicMaterial).color = new THREE.Color(cssVar("--bright-discovery") || cssVar("--discovery") || "#E97F01");
     }
     this.render();
   }
@@ -516,7 +516,7 @@ export class SceneController {
     this.scene.add(this.mesh);
 
     const edges = new THREE.EdgesGeometry(geo, 1);
-    const edgeMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#EF7F01", transparent: true, opacity: 0.0 });
+    const edgeMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#E97F01", transparent: true, opacity: 0.0 });
     this.triangleEdges = new THREE.LineSegments(edges, edgeMat);
     this.triangleEdges.visible = false;
     this.scene.add(this.triangleEdges);

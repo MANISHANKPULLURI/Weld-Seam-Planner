@@ -10,6 +10,7 @@ export type Health = {
   bodies: number;
   openEdges: number;
   nonManifold: number;
+  flippedFaces: number;
   isManifoldSolid: boolean;
   bounds: {
     min: { x: number; y: number; z: number };
@@ -32,7 +33,15 @@ export type Diagnostics = {
   };
 };
 
+export type OrientationResult = {
+  indexArray: Int32Array;
+  flipped: number;
+  conflicts: number;
+};
+
 export type RepairStats = {
   closed: number;
   aligned: number;
+  beforeTriangles: number;
+  afterTriangles: number;
 };

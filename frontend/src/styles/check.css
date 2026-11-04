@@ -69,6 +69,120 @@
   min-height: 18px;
 }
 
+.result-card { gap: 14px; }
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.result-card p { margin: 0; }
+
+.status-badge {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.status-badge-ok { color: var(--rev-green-t4); }
+.status-badge-warn { color: var(--warning); }
+.status-badge-danger { color: var(--danger); }
+.status-badge-neutral { color: var(--text-muted); }
+
+.health-summary {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.health-summary > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+.health-summary dt { color: var(--text-secondary); white-space: nowrap; }
+.health-summary dd { margin: 0; color: var(--text); font-weight: 500; text-align: right; }
+.health-unit { color: var(--text-muted); font-size: 12px; margin-left: 2px; }
+
+.health-checks {
+  list-style: none;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.health-check {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  font-size: 13px;
+}
+.health-check-icon { display: grid; place-items: center; }
+.health-check-ok .health-check-icon { color: var(--rev-green-t4); }
+.health-check-warn .health-check-icon { color: var(--warning); }
+.health-check-label { color: var(--text-secondary); }
+.health-check-warn .health-check-label { color: var(--text); }
+.health-check-value { font-weight: 500; color: var(--text-secondary); }
+.health-check-warn .health-check-value { color: var(--warning); }
+.health-check-hint {
+  grid-column: 2 / 4;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.result-actions-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+.result-actions-split > button { width: 100%; padding: 0 12px; }
+
+.btn-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border-strong);
+}
+.btn-link:hover { color: var(--text); }
+
+.btn-block { width: 100%; }
+
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field-label { font-size: 12px; color: var(--text-secondary); }
+.field-control {
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: 13px;
+}
+.field-note { font-size: 12px; line-height: 1.4; color: var(--warning); }
+
+.result-confirmed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--rev-green-t4);
+}
+
 .result-rows {
   display: flex;
   flex-direction: column;
@@ -96,11 +210,9 @@
 }
 
 .result-explainer {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
-  line-height: 1.4;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
+  line-height: 1.5;
 }
 
 .result-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -111,9 +223,11 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.repaired-table th { text-align: left; color: var(--text-muted); font-weight: 400; padding: 6px 0; }
-.repaired-table td { padding: 6px 0; color: var(--text-secondary); }
-.repaired-table .changed { color: var(--text); }
+.repaired-table th { text-align: left; color: var(--text-secondary); font-weight: 400; padding: 6px 0; }
+.repaired-table thead th { color: var(--text-muted); font-size: 12px; border-bottom: 1px solid var(--border); }
+.repaired-table td { padding: 6px 0; color: var(--text-secondary); text-align: right; }
+.repaired-table thead th:not(:first-child) { text-align: right; }
+.repaired-table .changed { color: var(--rev-green-t4); font-weight: 500; }
 .result-muted { font-size: 13px; color: var(--text-muted); }
 .result-secondary { font-size: 13px; color: var(--text-secondary); }
 .result-warning-text { font-size: 13px; color: var(--warning); }

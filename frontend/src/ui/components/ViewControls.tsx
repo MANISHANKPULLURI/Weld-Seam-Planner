@@ -38,9 +38,9 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
           <button type="button" aria-pressed={projection === "orthographic"} onClick={() => proj("orthographic")} title="Orthographic projection (no perspective)">Orthographic</button>
         </div>
         <div className="view-segmented" role="group" aria-label="Rendering mode">
-          <button type="button" aria-pressed={viewMode === "solid"} onClick={() => mode("solid")} title="Solid — smooth shaded"><LayersIcon size={12} /> Solid</button>
-          <button type="button" aria-pressed={viewMode === "wireframe"} onClick={() => mode("wireframe")} title="Wireframe — mesh edges"><GridIcon size={12} /> Wireframe</button>
-          <button type="button" aria-pressed={viewMode === "triangles"} onClick={() => mode("triangles")} title="Triangle visualization — display tessellation"><TriangleIcon size={12} /> Triangles</button>
+          <button type="button" aria-pressed={viewMode === "solid"} onClick={() => mode("solid")} title="Solid, smooth shaded"><LayersIcon size={12} /> Solid</button>
+          <button type="button" aria-pressed={viewMode === "wireframe"} onClick={() => mode("wireframe")} title="Wireframe, all mesh edges"><GridIcon size={12} /> Wireframe</button>
+          <button type="button" aria-pressed={viewMode === "triangles"} onClick={() => mode("triangles")} title="Feature edges over the solid part"><TriangleIcon size={12} /> Triangles</button>
         </div>
         <button type="button" className="view-btn" onClick={fit} aria-label="Fit model to view" title="Fit model (F)">
           <FitIcon size={12} /> Fit Model
@@ -51,7 +51,7 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
       </div>
 
       {}
-      <div className="view-controls view-controls-bottom-right" role="group" aria-label="Standard views — Z up">
+      <div className="view-controls view-controls-bottom-right" role="group" aria-label="Standard views, Z up">
         {(["iso", "top", "bottom", "front", "back", "left", "right"] as ViewId[]).map((id) => (
           <button
             key={id}
@@ -60,7 +60,7 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
             onClick={() => v(id)}
             aria-label={`View ${id}`}
             aria-pressed={view === id}
-            title={`${id.charAt(0).toUpperCase()+id.slice(1)} view — Z up`}
+            title={`${id.charAt(0).toUpperCase()+id.slice(1)} view, Z up`}
           >
             {id === "iso" ? <CubeIcon size={12} /> : null} {id === "iso" ? "Iso" : id.charAt(0).toUpperCase()+id.slice(1)}
           </button>

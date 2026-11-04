@@ -2,28 +2,32 @@ import { parseIncomingMeshBuffer } from "./parse.ts";
 import { weldVertexCoordinates } from "./weld.ts";
 import { computeAdjacencyDiagnostics, computeBounds, estimateBodies } from "./diagnostics.ts";
 import { healMeshBoundaries } from "./repair.ts";
-import { normalizeNormalOrientations } from "./normals.ts";
+import { orientConsistently } from "./normals.ts";
 import { packCleanBinarySTL } from "./write.ts";
+import type { Health, RepairStats } from "./types.ts";
 
 
-export function runValidationPipeline(buffer: ArrayBuffer) {
+export const DEFAULT_WELD_TOLERANCE = 1e-4;
+
+
+export function runValidationPipeline(buffer: ArrayBuffer, tolerance = DEFAULT_WELD_TOLERANCE) {
 
   const positions = parseIncomingMeshBuffer(buffer);
 
-  const welded = weldVertexCoordinates(positions);
+  const welded = weldVertexCoordinates(positions, tolerance);
 
   const diagnostics = computeAdjacencyDiagnostics(welded.indexArray);
 
-  const bounds = computeBounds(welded.uniqueVertices);
-  const bodies = estimateBodies(welded.indexArray);
+  const orientation = orientConsistently(welded.uniqueVertices, welded.indexArray);
 
-  const health = {
+  const health: Health = {
     triangles: welded.indexArray.length / 3,
-    bodies,
+    bodies: estimateBodies(welded.indexArray),
     openEdges: diagnostics.stats.openBoundaryCount,
     nonManifold: diagnostics.stats.nonManifoldCount,
+    flippedFaces: orientation.flipped,
     isManifoldSolid: diagnostics.stats.isManifoldSolid,
-    bounds,
+    bounds: computeBounds(welded.uniqueVertices),
   };
 
   return {
@@ -35,50 +39,43 @@ export function runValidationPipeline(buffer: ArrayBuffer) {
 }
 
 
-export function runRepairPipeline(buffer: ArrayBuffer) {
+export function runRepairPipeline(buffer: ArrayBuffer, tolerance = DEFAULT_WELD_TOLERANCE) {
 
   const positions = parseIncomingMeshBuffer(buffer);
 
-  const welded = weldVertexCoordinates(positions);
+  const welded = weldVertexCoordinates(positions, tolerance);
 
   const diagnostics = computeAdjacencyDiagnostics(welded.indexArray);
 
-  let repairedIndices = welded.indexArray;
+  let healedIndices = welded.indexArray;
   let closed = 0;
 
   if (diagnostics.stats.openBoundaryCount > 0) {
-
-    const before = repairedIndices.length;
-    repairedIndices = healMeshBoundaries(diagnostics.boundaryEdgeRegistry, welded.indexArray);
-    closed = (repairedIndices.length - before) / 3;
+    healedIndices = healMeshBoundaries(diagnostics.boundaryEdgeRegistry, welded.indexArray);
+    closed = (healedIndices.length - welded.indexArray.length) / 3;
   }
 
-  const beforeAlign = repairedIndices.slice();
-
-  repairedIndices = normalizeNormalOrientations(welded.uniqueVertices, repairedIndices);
-
-  let aligned = 0;
-
-  for (let i = 0; i < beforeAlign.length; i++) {
-    if (beforeAlign[i] !== repairedIndices[i]) aligned++;
-  }
-
-  aligned = Math.floor(aligned / 3);
+  const orientation = orientConsistently(welded.uniqueVertices, healedIndices);
+  const repairedIndices = orientation.indexArray;
 
   const newDiagnostics = computeAdjacencyDiagnostics(repairedIndices);
-  const bounds = computeBounds(welded.uniqueVertices);
-  const bodies = estimateBodies(repairedIndices);
 
-  const health = {
+  const health: Health = {
     triangles: repairedIndices.length / 3,
-    bodies,
+    bodies: estimateBodies(repairedIndices),
     openEdges: newDiagnostics.stats.openBoundaryCount,
     nonManifold: newDiagnostics.stats.nonManifoldCount,
+    flippedFaces: orientConsistently(welded.uniqueVertices, repairedIndices).flipped,
     isManifoldSolid: newDiagnostics.stats.isManifoldSolid,
-    bounds,
+    bounds: computeBounds(welded.uniqueVertices),
   };
 
-  const binary = packCleanBinarySTL(welded.uniqueVertices, repairedIndices);
+  const stats: RepairStats = {
+    closed,
+    aligned: orientation.flipped,
+    beforeTriangles: welded.indexArray.length / 3,
+    afterTriangles: repairedIndices.length / 3,
+  };
 
   return {
     health,
@@ -86,12 +83,7 @@ export function runRepairPipeline(buffer: ArrayBuffer) {
       uniqueVertices: welded.uniqueVertices,
       indexArray: repairedIndices,
     },
-    binary,
-    stats: {
-      closed,
-      aligned,
-      beforeTriangles: welded.indexArray.length / 3,
-      afterTriangles: repairedIndices.length / 3,
-    },
+    binary: packCleanBinarySTL(welded.uniqueVertices, repairedIndices),
+    stats,
   };
 }

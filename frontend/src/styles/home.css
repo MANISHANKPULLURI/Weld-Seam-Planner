@@ -21,6 +21,10 @@
   gap: 10px;
 }
 
+.home-logo .brand-logo { color: var(--rev-green-t4); }
+
+html[data-theme="light"] .home-logo .brand-logo { color: var(--rev-green); }
+
 .home-logo-wordmark {
   font-weight: 500;
   font-size: 14px;

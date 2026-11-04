@@ -14,6 +14,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "42dot Sans";
+  src: url("/fonts/42dotsans-bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Armatrix palette — copy-paste ready HEX per spec */
 
@@ -31,28 +39,28 @@
   --light-sand-s4: #93938D;
 
   /* Revolution Green — mapped to existing --rev-green tokens */
-  --revolution-green: #283B1F;
+  --revolution-green: #2B381F;
   --revolution-green-t1: #344425;
   --revolution-green-t2: #3D4F2C;
-  --revolution-green-t3: #465B32;
+  --revolution-green-t3: #455B32;
   --revolution-green-t4: #628047;
-  --rev-green: #283B1F;
+  --rev-green: #2B381F;
   --rev-green-t1: #344425;
   --rev-green-t2: #3D4F2C;
-  --rev-green-t3: #465B32;
+  --rev-green-t3: #455B32;
   --rev-green-t4: #628047;
 
   /* Bright Discovery — mapped to existing --discovery tokens */
-  --bright-discovery: #EF7F01;
-  --bright-discovery-t1: #E98F17;
-  --bright-discovery-t2: #EF9F1C;
-  --bright-discovery-t3: #ECA845;
-  --bright-discovery-t4: #ECBC7A;
-  --discovery: #EF7F01;
-  --discovery-t1: #E98F17;
-  --discovery-t2: #EF9F1C;
-  --discovery-t3: #ECA845;
-  --discovery-t4: #ECBC7A;
+  --bright-discovery: #E97F01;
+  --bright-discovery-t1: #E98917;
+  --bright-discovery-t2: #E9942F;
+  --bright-discovery-t3: #E99E46;
+  --bright-discovery-t4: #E9B475;
+  --discovery: #E97F01;
+  --discovery-t1: #E98917;
+  --discovery-t2: #E9942F;
+  --discovery-t3: #E99E46;
+  --discovery-t4: #E9B475;
 
   --danger: #E5534B;
 

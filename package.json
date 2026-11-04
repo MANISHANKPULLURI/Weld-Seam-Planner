@@ -2,6 +2,7 @@
   "private": true,
   "workspaces": ["backend", "frontend"],
   "scripts": {
+    "dev": "bun run --filter '*' dev",
     "check": "bun run --filter '*' check",
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build"

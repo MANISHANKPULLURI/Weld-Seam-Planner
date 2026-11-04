@@ -55,6 +55,15 @@
   white-space: nowrap;
 }
 
+.brand-logo { display: block; flex-shrink: 0; color: var(--text); }
+
+.brand-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+
 .planner-filechip {
   max-width: 280px;
   overflow: hidden;
