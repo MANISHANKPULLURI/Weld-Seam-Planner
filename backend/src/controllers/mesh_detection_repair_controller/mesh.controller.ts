@@ -71,7 +71,7 @@ function runValidation(buffer: ArrayBuffer, tolerance: number | undefined) {
 
 function runRepair(buffer: ArrayBuffer, tolerance: number | undefined) {
   const analysed = analyseMesh(buffer, { tolerance });
-  const repaired = repairMesh(analysed.vertices, analysed.indices, analysed.health);
+  const repaired = repairMesh(analysed.vertices, analysed.orientedIndices, analysed.health);
   return { analysed, repaired, binary: writeBinaryStl(analysed.vertices, repaired.indices) };
 }
 

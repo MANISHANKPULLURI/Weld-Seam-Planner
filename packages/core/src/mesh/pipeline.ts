@@ -9,7 +9,6 @@ import type { Health, ProgressFn, StlFormat } from "./types.ts";
 export type AnalyseOptions = {
   tolerance?: number;
   maxTriangles?: number;
-  rayVote?: boolean;
   onProgress?: ProgressFn;
 };
 
@@ -48,7 +47,7 @@ export function analyseMesh(buffer: ArrayBuffer, options: AnalyseOptions = {}): 
   progress("read", 1);
 
   progress("weld", 0);
-  const welded = weldVertices(parsed.positions, options.tolerance, (f) => progress("weld", f));
+  const welded = weldVertices(parsed.positions, options.tolerance, (f) => progress("weld", f), parsed.normals);
   progress("weld", 1);
 
   progress("topology", 0);
@@ -58,7 +57,7 @@ export function analyseMesh(buffer: ArrayBuffer, options: AnalyseOptions = {}): 
   progress("topology", 1);
 
   progress("orient", 0);
-  const orientation = orientFaces(welded.vertices, welded.indices, topology, { rayVote: options.rayVote, onProgress: (f) => progress("orient", f) });
+  const orientation = orientFaces(welded.vertices, welded.indices, topology, { fileNormals: welded.fileNormals, onProgress: (f) => progress("orient", f) });
   progress("orient", 1);
 
   return {
@@ -84,7 +83,9 @@ export function analyseMesh(buffer: ArrayBuffer, options: AnalyseOptions = {}): 
   };
 }
 
-export function repairMesh(vertices: Float32Array, indices: Uint32Array, previous?: Pick<Health, "degenerateRemoved" | "duplicateRemoved">): RepairedMesh {
+// Takes the analysed, already oriented mesh (orientedIndices). Hole fans are wound against their loop,
+// so they match their neighbours; closed shells are re-checked for inside-out volume.
+export function repairMesh(vertices: Float32Array, indices: Uint32Array, previous?: Pick<Health, "degenerateRemoved" | "duplicateRemoved" | "flippedFaces">): RepairedMesh {
 
   const vertexCount = vertices.length / 3;
   const before = buildTopology(indices, vertexCount);
@@ -92,10 +93,10 @@ export function repairMesh(vertices: Float32Array, indices: Uint32Array, previou
   const filled = before.openEdges > 0 ? fillBoundaryLoops(boundaryRegistry(indices, before), indices) : indices;
   const filledTopology = filled === indices ? before : buildTopology(filled, vertexCount);
 
-  const orientation = orientFaces(vertices, filled, filledTopology);
+  const orientation = orientFaces(vertices, filled, filledTopology, { islands: false });
   const after = buildTopology(orientation.indices, vertexCount);
   const bodies = labelBodies(orientation.indices, vertexCount, after);
-  const residual = orientFaces(vertices, orientation.indices, after);
+  const residual = orientFaces(vertices, orientation.indices, after, { islands: false });
 
   return {
     indices: orientation.indices,
@@ -113,7 +114,7 @@ export function repairMesh(vertices: Float32Array, indices: Uint32Array, previou
     },
     stats: {
       closed: (filled.length - indices.length) / 3,
-      aligned: orientation.flipped,
+      aligned: (previous?.flippedFaces ?? 0) + orientation.flipped,
       beforeTriangles: indices.length / 3,
       afterTriangles: orientation.indices.length / 3,
     },

@@ -190,20 +190,23 @@
   pointer-events: none;
 }
 
-.view-section-slider {
+.view-section-panel {
   top: 92px;
   right: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-secondary);
 }
-.view-section-slider input { width: 160px; accent-color: var(--accent); }
+.view-section-range { width: 180px; accent-color: var(--accent); cursor: pointer; }
+.view-section-mm { display: inline-flex; align-items: center; gap: 4px; }
+.view-section-mm .field-control { width: 72px; height: 26px; font-size: 12px; padding: 0 6px; }
+
 
 .view-controls {
   position: absolute;
@@ -256,7 +259,7 @@
   transition: background 150ms cubic-bezier(0.2,0,0,1), color 150ms cubic-bezier(0.2,0,0,1);
 }
 .view-btn:hover { background: var(--bg-raised); color: var(--text); }
-.view-btn-active { border-color: var(--accent); color: var(--text); }
+.view-btn-active, .view-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--text); }
 
 .view-segmented {
   display: flex;
@@ -368,3 +371,39 @@
   .orientation-gizmo-host { bottom: 48px; left: 8px; }
   .view-controls-bottom-left.view-chip { left: 8px; bottom: 8px; }
 }
+
+.seam-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.chip .numeric { color: inherit; opacity: 0.8; }
+.chip[aria-pressed="true"] { background: var(--bg-raised); color: var(--text); border-color: var(--rev-green-t3); }
+.seam-filter-length { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.seam-filter-length .field-control { width: 56px; height: 24px; font-size: 11px; padding: 0 6px; }
+.btn-link:disabled { opacity: 0.4; cursor: not-allowed; }
+.view-section-confirm { height: 28px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
+.view-section-locked { padding: 0 4px; white-space: nowrap; }
+.view-section-locked strong { color: var(--text); font-weight: 500; }
+.seam-area-note { font-size: 11px; color: var(--text-muted); }
+.seam-guide-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+.seam-guide-steps li { display: flex; gap: 8px; }
+.seam-guide-steps strong { color: var(--text); font-weight: 500; }
+.seam-guide-num { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-muted); }
+.seam-guide-steps li.is-done .seam-guide-num { background: var(--rev-green-t4); border-color: var(--rev-green-t4); color: var(--text-on-accent); }
+.seam-guide-steps li.is-done { opacity: 0.7; }
+.seam-guide-show { align-self: flex-start; font-size: 12px; }
+.seam-mode-box { padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 12px; line-height: 1.45; color: var(--text); }
+.field-hint { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+.seam-legend dl { margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.seam-legend dt { color: var(--text); font-weight: 500; }
+.seam-legend dd { margin: 0; color: var(--text-muted); line-height: 1.4; }

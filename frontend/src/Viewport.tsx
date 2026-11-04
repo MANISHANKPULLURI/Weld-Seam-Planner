@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { MM_PER_UNIT, measure, partSizeMm } from "@weld/core";
 import { SceneController } from "./viewer/SceneController";
+import type { SurfacePoint } from "./viewer/SceneController";
 import type { ViewId } from "./state/store";
-import { useStore } from "./state/store";
+import { candidateVisible, inWorkArea, mergeTargets, seamLengthMm, useStore } from "./state/store";
 import { ViewControls } from "./ui/components/ViewControls";
 import { OrientationGizmo } from "./viewer/OrientationGizmo";
 import { formatSize } from "./domain/mesh/describe";
@@ -30,6 +31,7 @@ export default function Viewport() {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftPoint[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [snapKind, setSnapKind] = useState<SurfacePoint["snapped"]>(null);
 
   const phase = useStore((s) => s.phase);
   const mesh = useStore((s) => s.mesh);
@@ -46,6 +48,8 @@ export default function Viewport() {
   const xray = useStore((s) => s.xray);
   const section = useStore((s) => s.section);
   const hiddenBodies = useStore((s) => s.hiddenBodies);
+  const candidateFilter = useStore((s) => s.candidateFilter);
+  const workArea = useStore((s) => s.workArea);
 
   const seamTools = step === "seams";
   const activeTool = seamTools ? tool : "select";
@@ -64,8 +68,13 @@ export default function Viewport() {
     if (hostRef.current) hostRef.current.dataset.tool = activeTool;
     setDraft([]);
     setHoverId(null);
+    setSnapKind(null);
     ctrlRef.current?.setSeamPreview(null);
+    ctrlRef.current?.setSnapMarker(null);
   }, [activeTool]);
+
+  const pendingAction = useStore((s) => s.pendingAction);
+  useEffect(() => { if (pendingAction !== "split") ctrlRef.current?.setSnapMarker(null); }, [pendingAction]);
 
   useEffect(() => {
     const c = ctrlRef.current;
@@ -98,8 +107,9 @@ export default function Viewport() {
   }, [frame.units, frame.upAxis, mesh]);
 
   useEffect(() => {
-    ctrlRef.current?.setSeams(seams.map((s) => ({ id: s.id, points: s.points, closed: s.closed, status: s.status })));
-  }, [seams]);
+    const shown = seams.filter((s) => candidateVisible(s, candidateFilter, frame.units) && inWorkArea(s, workArea));
+    ctrlRef.current?.setSeams(shown.map((s) => ({ id: s.id, points: s.points, closed: s.closed, status: s.status })));
+  }, [seams, candidateFilter, frame.units, workArea]);
 
   useEffect(() => { ctrlRef.current?.setSeamHighlight(selectedSeamId, hoverId); }, [selectedSeamId, hoverId, seams]);
   useEffect(() => { ctrlRef.current?.setXray(xray); }, [xray]);
@@ -124,8 +134,24 @@ export default function Viewport() {
     return () => clearTimeout(timer);
   }, [notice]);
 
+  // Draw snaps to seam ends first, so a drawn seam joins existing ones end to end.
+  function snapTargets() {
+    const s = useStore.getState();
+    const ends: [number, number, number][] = [];
+    for (const x of s.seams) {
+      if (x.status !== "accepted" || x.closed || !inWorkArea(x, s.workArea)) continue;
+      const n = x.points.length / 3;
+      ends.push([x.points[0]!, x.points[1]!, x.points[2]!], [x.points[n * 3 - 3]!, x.points[n * 3 - 2]!, x.points[n * 3 - 1]!]);
+    }
+    return { ends, edges: s.featureChains };
+  }
+
   function finishDraft() {
-    if (draft.length >= 2) useStore.getState().addSeam(draftPath(draft), "drawn");
+    if (draft.length >= 2) {
+      const id = useStore.getState().addSeam(draftPath(draft), "drawn");
+      const touching = mergeTargets(useStore.getState().seams, id);
+      if (touching.length) setNotice(`Connected to ${touching.map((x) => x.name).join(" and ")}. Use Merge to make them one weld.`);
+    }
     setDraft([]);
     ctrlRef.current?.setSeamPreview(null);
   }
@@ -137,7 +163,7 @@ export default function Viewport() {
       if (activeTool === "draw") {
         if (e.key === "Enter") { e.preventDefault(); finishDraft(); }
         else if (e.key === "Backspace") { e.preventDefault(); setDraft((d) => d.slice(0, -1)); }
-        else if (e.key === "Escape") { setDraft([]); ctrlRef.current?.setSeamPreview(null); }
+        else if (e.key === "Escape") { setDraft([]); ctrlRef.current?.setSeamPreview(null); ctrlRef.current?.setSnapMarker(null); }
         return;
       }
       if (e.key === "Escape") { if (s.pendingAction) s.setPendingAction(null); else s.selectSeam(null); }
@@ -157,15 +183,22 @@ export default function Viewport() {
     moveFrame.current = requestAnimationFrame(() => {
       const c = ctrlRef.current;
       if (!c) return;
-      if (activeTool === "select") {
+      const s = useStore.getState();
+      const selected = s.pendingAction === "split" ? s.seams.find((x) => x.id === s.selectedSeamId) : undefined;
+      if (activeTool === "select" && selected) {
+        const hit = c.pickPath([selected], { clientX, clientY }, 12);
+        c.setSnapMarker(hit ? (c.toPart(hit.world)) : null, "split");
+      } else if (activeTool === "select") {
         setHoverId(c.pickSeam({ clientX, clientY }));
       } else if (activeTool === "edge") {
         const hit = c.pickPath(featureChains, { clientX, clientY });
         const chain = hit ? featureChains[hit.index]! : null;
         c.setSeamPreview(chain ? chain.points : null, chain?.closed);
-      } else if (activeTool === "draw" && draft.length > 0) {
-        const surface = c.surfacePoint({ clientX, clientY });
-        c.setSeamPreview(draftPath(surface ? [...draft, surface] : draft).points);
+      } else if (activeTool === "draw") {
+        const surface = c.surfacePoint({ clientX, clientY }, snapTargets());
+        c.setSnapMarker(surface?.point ?? null, surface?.snapped ?? "surface");
+        setSnapKind(surface?.snapped ?? null);
+        if (draft.length > 0) c.setSeamPreview(draftPath(surface ? [...draft, surface] : draft).points);
       }
     });
   }
@@ -179,7 +212,7 @@ export default function Viewport() {
     const s = useStore.getState();
 
     if (activeTool === "draw") {
-      const surface = c.surfacePoint(e);
+      const surface = c.surfacePoint(e, snapTargets());
       if (surface) setDraft((d) => [...d, surface]);
       return;
     }
@@ -196,8 +229,20 @@ export default function Viewport() {
     const selected = s.seams.find((x) => x.id === s.selectedSeamId);
     if (s.pendingAction === "split" && selected) {
       const hit = c.pickPath([selected], e, 12);
-      if (hit) s.splitSeam(selected.id, hit.segment, hit.t);
-      else setNotice("Click on the selected seam where it should be split.");
+      if (!hit) { setNotice("Click on the orange seam where it should be cut."); return; }
+      const before = new Set(s.seams.map((x) => x.id));
+      s.splitSeam(selected.id, hit.segment, hit.t);
+      const after = useStore.getState();
+      const parts = after.seams.filter((x) => !before.has(x.id));
+      // Show the result: first piece selected (orange), second lit up, a big dot at the cut, for a moment.
+      if (parts.length === 2) {
+        const p = parts[0]!.points, n = p.length / 3;
+        c.setSnapMarker([p[n * 3 - 3]!, p[n * 3 - 2]!, p[n * 3 - 1]!], "split");
+        setHoverId(parts[1]!.id);
+        setTimeout(() => { setHoverId(null); ctrlRef.current?.setSnapMarker(null); }, 2500);
+      } else c.setSnapMarker(null);
+      if (parts.length === 2) setNotice(`Cut into ${parts.map((x) => `${x.name} (${seamLengthMm(x, after.frame.units).toFixed(1)} mm)`).join(" and ")}. The dot marks the new joint.`);
+      else if (parts.length === 1) setNotice(`Loop opened at that point: ${parts[0]!.name} now starts and ends there.`);
       return;
     }
     if (s.pendingAction === "merge" && selected) {
@@ -210,9 +255,11 @@ export default function Viewport() {
   }
 
   const sizeMm = health ? partSizeMm(health.bounds.size, frame.units, frame.upAxis) : null;
-  const drawHint = activeTool === "draw" ? (draft.length === 0 ? "Click on the part to start a seam." : `${draft.length} point${draft.length === 1 ? "" : "s"}. Enter or double-click to finish, Backspace to undo, Esc to cancel.`) : null;
+  const snapText = snapKind === "end" ? " Snapped to a seam end." : snapKind === "corner" ? " Snapped to a corner." : snapKind === "edge" ? " Snapped to an edge." : "";
+  const drawHint = activeTool === "draw" ? (draft.length === 0 ? `Click on the part to start a seam. Points snap to seam ends, corners and edges.${snapText}` : `${draft.length} point${draft.length === 1 ? "" : "s"}.${snapText} Enter or double-click to finish, Backspace to undo, Esc to cancel.`) : null;
   const pending = useStore((s) => s.pendingAction);
-  const pendingHint = pending === "split" ? "Click on the selected seam where it should be split. Esc to cancel." : pending === "merge" ? "Click the seam to merge with. Esc to cancel." : null;
+  const mergeNames = useStore((s) => (s.pendingAction === "merge" && s.selectedSeamId ? mergeTargets(s.seams, s.selectedSeamId).map((x) => x.name).join(" or ") : ""));
+  const pendingHint = pending === "split" ? "Move along the orange seam: the dot shows where it will be cut. Click to cut. Esc to cancel." : pending === "merge" ? `Click ${mergeNames || "a touching seam"} to join it. Esc to cancel.` : null;
 
   return (
     <div className={`viewport-wrapper${activeTool !== "select" ? " viewport-host-draw" : ""}`}>
@@ -223,7 +270,7 @@ export default function Viewport() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onDoubleClick={() => { if (activeTool === "draw") finishDraft(); }}
-        onPointerLeave={() => setHoverId(null)}
+        onPointerLeave={() => { setHoverId(null); if (activeTool === "draw" || pendingAction === "split") ctrlRef.current?.setSnapMarker(null); }}
       />
       <ViewControls controller={ctrl} />
       <div className="orientation-gizmo-host">

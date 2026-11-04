@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { MM_PER_UNIT, guessUnits, guessUpAxis, joinPaths, reversePath, seamId, splitPath } from "@weld/core";
+import { MM_PER_UNIT, guessUnits, guessUpAxis, joinPaths, partSizeMm, reversePath, samePath, seamId, splitPath } from "@weld/core";
 import type { DetectResult, Health, MeshStage, RepairStats, SeamCandidate, SeamPath, SeamSource, StlFormat, Units, UpAxis } from "@weld/core";
 import { hasIssues } from "../domain/mesh/describe";
 
@@ -40,15 +40,56 @@ export type RepairResult = { indices: Uint32Array; bodyOfTriangle: Uint32Array; 
 
 export type Seam = SeamCandidate & { status: "candidate" | "accepted"; name: string };
 
-export type DetectSettings = { featureAngleDeg: number; minLengthMm: number; gapMm: number; includeOutside: boolean };
+// minLengthMm null means automatic: 1% of the part's diagonal, at least 5 mm.
+export type DetectSettings = { featureAngleDeg: number; minLengthMm: number | null; gapMm: number; includeOutside: boolean };
 
-export type Detection = { status: "idle" | "running" | "done" | "error"; error: string | null; run: number };
+export type CandidateFilter = { hidden: SeamSource[]; minLengthMm: number };
+
+export type Section = { axis: SectionAxis; offset: number; flipped: boolean };
+
+// A confirmed section: everything (detection, list, picking, drawing) is limited to its kept side.
+// plane is in file coordinates; points with normal·p + constant >= 0 are inside.
+export type WorkArea = { plane: { normal: [number, number, number]; constant: number }; label: string };
+
+export function inWorkArea(seam: { points: Float32Array }, area: WorkArea | null): boolean {
+  if (!area) return true;
+  const { normal: n, constant } = area.plane;
+  const p = seam.points;
+  for (let i = 0; i < p.length; i += 3) if (n[0] * p[i]! + n[1] * p[i + 1]! + n[2] * p[i + 2]! + constant >= 0) return true;
+  return false;
+}
+
+type WorkState = Pick<Store, "step" | "verdict" | "health" | "mesh" | "originalMesh" | "repaired" | "repairStats" | "repairedBinary" | "frame" | "seams" | "rejectedIds" | "featureChains" | "detectSettings" | "detection" | "hiddenBodies" | "candidateFilter">;
+
+// scope describes the area searched ("inside the section cut"), null for the whole part.
+export type Detection = { status: "idle" | "running" | "done" | "error"; error: string | null; run: number; scope?: string | null };
 
 export type SectionAxis = "x" | "y" | "z";
 
 export type PendingAction = "split" | "merge" | null;
 
-export const DEFAULT_DETECT_SETTINGS: DetectSettings = { featureAngleDeg: 30, minLengthMm: 5, gapMm: 0.05, includeOutside: false };
+export const DEFAULT_DETECT_SETTINGS: DetectSettings = { featureAngleDeg: 45, minLengthMm: null, gapMm: 0.05, includeOutside: false };
+
+export function autoMinLengthMm(health: Health | null, units: Units): number {
+  if (!health) return 5;
+  const s = partSizeMm(health.bounds.size, units, "+z");
+  return Math.max(5, Math.round(Math.hypot(s.x, s.y, s.z) * 0.01));
+}
+
+const joinTolerance = (a: Seam, b: Seam) => Math.max(a.length, b.length) * 1e-3;
+
+// Seams that touch the given one end to end, so the two can become one continuous weld.
+export function mergeTargets(seams: Seam[], id: string): Seam[] {
+  const seam = seams.find((x) => x.id === id);
+  if (!seam || seam.closed) return [];
+  return seams.filter((x) => x.id !== id && x.status === "accepted" && joinPaths(seam, x, joinTolerance(seam, x)) !== null);
+}
+
+const duplicates = (a: Seam, b: Seam) => samePath(a, b, joinTolerance(a, b) * 5);
+
+export function candidateVisible(seam: Seam, filter: CandidateFilter, units: Units): boolean {
+  return seam.status === "accepted" || (!filter.hidden.includes(seam.source) && seamLengthMm(seam, units) >= filter.minLengthMm);
+}
 
 const JOINT_FOR_SOURCE: Partial<Record<SeamSource, SeamCandidate["jointType"]>> = { edge_chain: "unknown", drawn: "unknown" };
 
@@ -102,8 +143,12 @@ type Store = {
   detection: Detection;
   pendingAction: PendingAction;
   xray: boolean;
-  section: { axis: SectionAxis; offset: number } | null;
+  section: Section | null;
+  workArea: WorkArea | null;
   hiddenBodies: number[];
+  candidateFilter: CandidateFilter;
+  initial: WorkState | null;
+  checkpoint: { savedAt: number; state: WorkState } | null;
 
   startAnalysing: (fileName: string, sizeBytes: number) => number;
   setStageProgress: (generation: number, stage: StageId, fraction: number) => void;
@@ -125,7 +170,7 @@ type Store = {
   confirmFrame: () => void;
 
   setDetectSettings: (patch: Partial<DetectSettings>) => void;
-  startDetect: () => number;
+  startDetect: (scope?: string | null) => number;
   finishDetect: (run: number, result: DetectResult) => void;
   failDetect: (run: number, message: string) => void;
   acceptSeams: (ids: string[]) => void;
@@ -139,7 +184,12 @@ type Store = {
   mergeSeams: (id: string, otherId: string) => string | null;
   setPendingAction: (action: PendingAction) => void;
   setXray: (on: boolean) => void;
-  setSection: (section: { axis: SectionAxis; offset: number } | null) => void;
+  setSection: (section: Section | null) => void;
+  setWorkArea: (workArea: WorkArea | null) => void;
+  setCandidateFilter: (patch: Partial<CandidateFilter>) => void;
+  saveCheckpoint: () => void;
+  restoreCheckpoint: () => void;
+  resetToInitial: () => void;
   toggleBody: (body: number) => void;
   isolateBody: (body: number) => void;
   showAllBodies: () => void;
@@ -166,8 +216,24 @@ const clearedPart = () => ({
   detection: { status: "idle", error: null, run: 0 } as Detection,
   pendingAction: null as PendingAction,
   section: null,
+  workArea: null,
   hiddenBodies: [] as number[],
+  candidateFilter: { hidden: [], minLengthMm: 0 } as CandidateFilter,
+  detectSettings: { ...DEFAULT_DETECT_SETTINGS },
+  initial: null,
+  checkpoint: null,
 });
+
+function snapshot(s: Store): WorkState {
+  return {
+    step: s.step, verdict: s.verdict, health: s.health, mesh: s.mesh, originalMesh: s.originalMesh, repaired: s.repaired,
+    repairStats: s.repairStats, repairedBinary: s.repairedBinary, frame: s.frame, seams: s.seams, rejectedIds: s.rejectedIds,
+    featureChains: s.featureChains, detectSettings: s.detectSettings, detection: { ...s.detection, status: s.detection.status === "running" ? "idle" : s.detection.status },
+    hiddenBodies: s.hiddenBodies, candidateFilter: s.candidateFilter,
+  };
+}
+
+const transient = { phase: "checked" as Phase, selectedSeamId: null, pendingAction: null as PendingAction, error: null, section: null, workArea: null, xray: false };
 
 export const useStore = create<Store>((set, get) => ({
   phase: "empty",
@@ -177,7 +243,6 @@ export const useStore = create<Store>((set, get) => ({
   viewMode: "solid",
   view: "iso",
   generation: 0,
-  detectSettings: { ...DEFAULT_DETECT_SETTINGS },
   xray: false,
 
   startAnalysing: (fileName, sizeBytes) => {
@@ -207,7 +272,7 @@ export const useStore = create<Store>((set, get) => ({
     if (generation !== s.generation) return {};
     const size = result.health.bounds.size;
     const guess = guessUnits(size, s.part?.fileName ?? null);
-    return {
+    const next = {
       phase: "checked",
       progress: 100,
       stages: { read: "done", weld: "done", topology: "done", orient: "done" },
@@ -217,6 +282,7 @@ export const useStore = create<Store>((set, get) => ({
       part: { fileName: s.part?.fileName ?? "part.stl", sizeBytes: result.sizeBytes, sha256: result.sha256, format: result.format, solids: result.solids, warnings: result.warnings },
       frame: { units: guess.units, unitsGuessed: true, unitsNote: guess.note, upAxis: guessUpAxis(size), upGuessed: true, confirmed: false },
     };
+    return { ...next, initial: snapshot({ ...s, ...next } as Store) };
   }),
 
   failAnalysis: (generation, message) => set((s) => {
@@ -277,9 +343,9 @@ export const useStore = create<Store>((set, get) => ({
 
   setDetectSettings: (patch) => set((s) => ({ detectSettings: { ...s.detectSettings, ...patch } })),
 
-  startDetect: () => {
+  startDetect: (scope = null) => {
     const run = get().detection.run + 1;
-    set({ detection: { status: "running", error: null, run } });
+    set({ detection: { status: "running", error: null, run, scope } });
     return run;
   },
 
@@ -288,17 +354,20 @@ export const useStore = create<Store>((set, get) => ({
     if (run !== s.detection.run) return {};
     const accepted = s.seams.filter((x) => x.status === "accepted");
     const skip = new Set([...accepted.map((x) => x.id), ...s.rejectedIds]);
-    const candidates: Seam[] = result.candidates.filter((c) => !skip.has(c.id)).map((c) => ({ ...c, status: "candidate", name: "" }));
+    const candidates: Seam[] = result.candidates
+      .filter((c) => !skip.has(c.id))
+      .map((c): Seam => ({ ...c, status: "candidate", name: "" }))
+      .filter((c) => !accepted.some((a) => duplicates(a, c)));
     const seams = [...accepted, ...candidates];
     return {
       seams,
       featureChains: result.featureChains,
-      detection: { status: "done", error: null, run },
+      detection: { ...s.detection, status: "done", error: null },
       selectedSeamId: seams.some((x) => x.id === s.selectedSeamId) ? s.selectedSeamId : null,
     };
   }),
 
-  failDetect: (run, message) => set((s) => (run !== s.detection.run ? {} : { detection: { status: "error", error: message, run } })),
+  failDetect: (run, message) => set((s) => (run !== s.detection.run ? {} : { detection: { ...s.detection, status: "error", error: message } })),
 
   acceptSeams: (ids) => set((s) => {
     const wanted = new Set(ids);
@@ -320,7 +389,10 @@ export const useStore = create<Store>((set, get) => ({
 
   addSeam: (path, source) => {
     const seam = manualSeam(path, source, get().seams);
-    set((s) => ({ seams: [...s.seams.filter((x) => x.id !== seam.id), seam], selectedSeamId: seam.id }));
+    const existing = get().seams.find((x) => x.status === "accepted" && duplicates(x, seam));
+    if (existing) { set({ selectedSeamId: existing.id }); return existing.id; }
+    // A candidate on the same line is replaced by the seam the user added.
+    set((s) => ({ seams: [...s.seams.filter((x) => x.id !== seam.id && !(x.status === "candidate" && duplicates(x, seam))), seam], selectedSeamId: seam.id }));
     return seam.id;
   },
 
@@ -352,9 +424,9 @@ export const useStore = create<Store>((set, get) => ({
     const s = get();
     const a = s.seams.find((x) => x.id === id), b = s.seams.find((x) => x.id === otherId);
     if (!a || !b || a === b) return "Pick a different seam to merge with.";
-    const tolerance = Math.max(a.length, b.length) * 1e-3;
-    const joined = joinPaths(a, b, tolerance);
-    if (!joined) return "These seams don't share an end, so they can't be merged.";
+    if (b.status !== "accepted") return "Accept that candidate first, then merge.";
+    const joined = joinPaths(a, b, joinTolerance(a, b));
+    if (!joined) return `${b.name || "That seam"} doesn't touch an end of ${a.name}, so they can't be joined.`;
     const merged: Seam = { ...a, ...joined, id: seamId(a.source, joined), status: "accepted" };
     set({ seams: [...s.seams.filter((x) => x.id !== id && x.id !== otherId), merged], selectedSeamId: merged.id, pendingAction: null });
     return null;
@@ -362,7 +434,12 @@ export const useStore = create<Store>((set, get) => ({
 
   setPendingAction: (pendingAction) => set({ pendingAction }),
   setXray: (xray) => set({ xray }),
-  setSection: (section) => set({ section }),
+  setSection: (section) => set(section ? { section } : { section, workArea: null }),
+  setWorkArea: (workArea) => set({ workArea }),
+  setCandidateFilter: (patch) => set((s) => ({ candidateFilter: { ...s.candidateFilter, ...patch } })),
+  saveCheckpoint: () => set((s) => ({ checkpoint: { savedAt: Date.now(), state: snapshot(s) } })),
+  restoreCheckpoint: () => set((s) => (s.checkpoint ? { ...s.checkpoint.state, ...transient } : {})),
+  resetToInitial: () => set((s) => (s.initial ? { ...s.initial, ...transient } : {})),
   toggleBody: (body) => set((s) => ({ hiddenBodies: s.hiddenBodies.includes(body) ? s.hiddenBodies.filter((b) => b !== body) : [...s.hiddenBodies, body] })),
   isolateBody: (body) => set((s) => ({ hiddenBodies: Array.from({ length: s.health?.bodies ?? 0 }, (_, i) => i).filter((i) => i !== body) })),
   showAllBodies: () => set({ hiddenBodies: [] }),

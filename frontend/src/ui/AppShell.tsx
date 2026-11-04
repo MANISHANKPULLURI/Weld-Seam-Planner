@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Logo } from "./Logo";
 import { LocalOnlyChip } from "./components/LocalOnlyChip";
 import { PartChip } from "./components/PartChip";
+import { WorkControls } from "./components/WorkControls";
 import { useStore } from "../state/store";
 import type { Step } from "../state/store";
 import { PanelLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
@@ -45,7 +46,10 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
           </button>
         </div>
         <PartChip />
-        <LocalOnlyChip />
+        <div className="planner-topbar-group">
+          <WorkControls />
+          <LocalOnlyChip />
+        </div>
       </header>
       <aside id="planner-panel" className="planner-panel" aria-hidden={collapsed}>
         <ol className="planner-steps" aria-label="Steps">

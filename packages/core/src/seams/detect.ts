@@ -1,16 +1,19 @@
-import { Box3, BufferAttribute, BufferGeometry, Line3, Matrix4, Vector3 } from "three";
+import { Box3, BufferAttribute, BufferGeometry, Line3, Matrix4, Plane, Triangle, Vector3 } from "three";
 import { MeshBVH } from "three-mesh-bvh";
 import type { HitPointInfo } from "three-mesh-bvh";
 import { buildTopology, halfEdgeEnd } from "../mesh/topology.ts";
 import { diagonalOf } from "../mesh/bounds.ts";
 import { chainSegments, dot, len, normalize, sub } from "./chain.ts";
 import type { Segment } from "./chain.ts";
-import type { DetectOptions, DetectResult, JointType, SeamCandidate, SeamPath, SeamSource } from "./types.ts";
+import type { DetectOptions, DetectRegion, DetectResult, JointType, SeamCandidate, SeamPath, SeamSource } from "./types.ts";
 
-export const DEFAULT_DETECT_OPTIONS: DetectOptions = { featureAngleDeg: 30, minLength: 5, contactTolerance: 0.05, includeOutside: false };
+// A fillet weld needs an opening of roughly 60-135° between the plates, i.e. a bend of 45-120°
+// between their faces (AWS D1.1 / EN 1993-1-8 skewed-joint limits); shallower creases and
+// near-folds are not weldable corners.
+export const DEFAULT_DETECT_OPTIONS: DetectOptions = { featureAngleDeg: 45, minLength: 5, contactTolerance: 0.05, includeOutside: false };
 
 const EDGE_CHAIN_MIN_DEG = 20;
-const MAX_OPENING_BEND_DEG = 150;
+const MAX_OPENING_BEND_DEG = 120;
 const BAND_MAX_DEG = 60;
 
 type Crease = { h: number; f: number; g: number; angle: number; concave: boolean };
@@ -40,6 +43,10 @@ export function detectSeams(vertices: Float32Array, indices: Uint32Array, bodyOf
     creases.push({ h, f, g, angle, concave: isConcave(vertices, indices, normals, f, g) });
   }
 
+  const hidden = new Uint8Array(bodyCount(bodyOfTriangle));
+  for (const b of options.region?.hiddenBodies ?? []) if (b < hidden.length) hidden[b] = 1;
+  const visible = (c: Crease) => !hidden[bodyOfTriangle[c.f]!];
+
   const banded = creases.map((c) => isBanded(c, creases, creaseOfHalfEdge, vertices, indices, topology.twin, normals));
 
   const inside: Segment[] = [];
@@ -49,7 +56,7 @@ export function detectSeams(vertices: Float32Array, indices: Uint32Array, bodyOf
   creases.forEach((c, i) => {
     const segment = edgeSegment(vertices, indices, normals, c);
     if (c.angle >= EDGE_CHAIN_MIN_DEG) features.push(segment);
-    if (c.angle < options.featureAngleDeg || banded[i]) return;
+    if (c.angle < options.featureAngleDeg || banded[i] || !visible(c)) return;
     if (c.concave && c.angle <= MAX_OPENING_BEND_DEG) inside.push(segment);
     if (!c.concave && options.includeOutside) outside.push(segment);
   });
@@ -62,14 +69,81 @@ export function detectSeams(vertices: Float32Array, indices: Uint32Array, bodyOf
   const bodies = splitBodies(vertices, indices, bodyOfTriangle);
 
   if (bodies.length > 1) {
-    const sharpConvex = creases.filter((c, i) => !c.concave && c.angle >= options.featureAngleDeg && !banded[i]);
-    for (const group of contactSegments(vertices, indices, normals, bodyOfTriangle, bodies, sharpConvex, options.contactTolerance)) {
+    const sharpConvex = creases.filter((c, i) => !c.concave && c.angle >= options.featureAngleDeg && !banded[i] && visible(c));
+    for (const group of contactSegments(vertices, indices, normals, bodyOfTriangle, bodies, sharpConvex, options.contactTolerance, hidden)) {
       candidates.push(...toCandidates(chainSegments(group.segments, tolerance), "contact", group.joint, options));
     }
-    candidates.push(...toCandidates(chainSegments(intersectionSegments(bodies, normals, tolerance), tolerance), "intersection", "fillet", options));
+    candidates.push(...toCandidates(chainSegments(intersectionSegments(bodies, normals, tolerance, hidden), tolerance), "intersection", "fillet", options));
   }
 
-  return { candidates: dedupe(candidates, Math.max(options.contactTolerance, tolerance) * 2), featureChains: chainSegments(features, tolerance) };
+  const keep = options.region?.keep;
+  const inRegion = keep ? clipCandidates(candidates, keep, options) : candidates;
+
+  // Feature chains stay complete so Pick edge works everywhere once the section is closed.
+  return { candidates: dedupe(inRegion, Math.max(options.contactTolerance, tolerance) * 2), featureChains: chainSegments(features, tolerance) };
+}
+
+
+function bodyCount(bodyOfTriangle: Uint32Array): number {
+  let count = 0;
+  for (const b of bodyOfTriangle) if (b + 1 > count) count = b + 1;
+  return count;
+}
+
+
+// Trims each candidate to the kept side of the plane, splitting it where it crosses.
+// Untouched candidates keep their id; trimmed pieces get a new one from their new geometry.
+function clipCandidates(candidates: SeamCandidate[], keep: NonNullable<DetectRegion["keep"]>, options: DetectOptions): SeamCandidate[] {
+
+  const out: SeamCandidate[] = [];
+  const side = (p: Float32Array, i: number) => keep.normal[0] * p[i * 3]! + keep.normal[1] * p[i * 3 + 1]! + keep.normal[2] * p[i * 3 + 2]! + keep.constant;
+
+  for (const c of candidates) {
+
+    const n = c.points.length / 3;
+    const d = Array.from({ length: n }, (_, i) => side(c.points, i));
+
+    if (d.every((x) => x >= 0)) { out.push(c); continue; }
+    if (d.every((x) => x < 0)) continue;
+
+    // Walk from an outside point so closed loops split cleanly.
+    const start = c.closed ? d.findIndex((x) => x < 0) : 0;
+    const steps = c.closed ? n : n - 1;
+    const pieces: number[][][] = [];
+    let current: number[][] | null = null;
+
+    const point = (i: number) => [0, 1, 2].map((k) => c.points[i * 3 + k]!);
+    const normal = (arr: Float32Array, i: number) => [0, 1, 2].map((k) => arr[i * 3 + k]!);
+    const entry = (i: number) => [...point(i), ...normal(c.normalsA, i), ...normal(c.normalsB, i)];
+
+    if (!c.closed && d[0]! >= 0) current = [entry(0)];
+
+    for (let s = 0; s < steps; s++) {
+      const i = (start + s) % n, j = (i + 1) % n;
+      const di = d[i]!, dj = d[j]!;
+      if ((di >= 0) !== (dj >= 0)) {
+        const t = di / (di - dj);
+        const near = t < 0.5 ? i : j;
+        const cut = [...point(i).map((v, k) => v + (point(j)[k]! - v) * t), ...normal(c.normalsA, near), ...normal(c.normalsB, near)];
+        if (di >= 0) { current!.push(cut); pieces.push(current!); current = null; }
+        else current = [cut];
+      }
+      if (dj >= 0) current?.push(entry(j));
+    }
+    if (current) pieces.push(current);
+
+    for (const piece of pieces) {
+      if (piece.length < 2) continue;
+      const points = new Float32Array(piece.flatMap((e) => e.slice(0, 3)));
+      let length = 0;
+      for (let i = 1; i < piece.length; i++) length += Math.hypot(points[i * 3]! - points[i * 3 - 3]!, points[i * 3 + 1]! - points[i * 3 - 2]!, points[i * 3 + 2]! - points[i * 3 - 1]!);
+      if (length < options.minLength) continue;
+      const path: SeamPath = { points, normalsA: new Float32Array(piece.flatMap((e) => e.slice(3, 6))), normalsB: new Float32Array(piece.flatMap((e) => e.slice(6, 9))), closed: false, length };
+      out.push({ ...c, ...path, id: seamId(c.source, path) });
+    }
+  }
+
+  return out;
 }
 
 
@@ -173,7 +247,7 @@ function splitBodies(vertices: Float32Array, indices: Uint32Array, bodyOfTriangl
 
 
 // Sharp convex edges of one body that lie on another body's surface: a plate edge standing on a plate.
-function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: Float64Array, bodyOfTriangle: Uint32Array, bodies: Body[], creases: Crease[], tolerance: number): { joint: JointType; segments: Segment[] }[] {
+function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: Float64Array, bodyOfTriangle: Uint32Array, bodies: Body[], creases: Crease[], tolerance: number, hidden: Uint8Array): { joint: JointType; segments: Segment[] }[] {
 
   const groups: Record<"fillet" | "butt" | "corner", Segment[]> = { fillet: [], butt: [], corner: [] };
   const point = new Vector3();
@@ -191,7 +265,7 @@ function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: 
 
     for (let other = 0; other < bodies.length; other++) {
 
-      if (other === own || !bodies[other]!.box.intersectsBox(edgeBox)) continue;
+      if (other === own || hidden[other] || !bodies[other]!.box.intersectsBox(edgeBox)) continue;
 
       const body = bodies[other]!;
       let touching = true;
@@ -199,7 +273,7 @@ function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: 
       for (let s = 0; s <= samples && touching; s++) {
         const t = s / samples;
         point.set(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
-        touching = body.bvh.closestPointToPoint(point, hit, 0, tolerance) !== null;
+        touching = within(body, point, hit, tolerance);
       }
 
       if (!touching) continue;
@@ -212,7 +286,7 @@ function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: 
         const step = Math.min(len(toward) * 0.5, Math.max(tolerance * 20, length * 0.01));
         const dir = normalize(toward);
         point.set(mid[0]! + dir[0] * step, mid[1]! + dir[1] * step, mid[2]! + dir[2] * step);
-        return body.bvh.closestPointToPoint(point, hit, 0, tolerance) ? body.faces[body.bvh.resolveTriangleIndex(hit.faceIndex)]! : -1;
+        return within(body, point, hit, tolerance) ? body.faces[body.bvh.resolveTriangleIndex(hit.faceIndex)]! : -1;
       };
 
       const onF = probe(c.f), onG = probe(c.g);
@@ -233,8 +307,16 @@ function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: 
 }
 
 
-// Where one body passes through another, e.g. a tube through a plate.
-function intersectionSegments(bodies: Body[], normals: Float64Array, tolerance: number): Segment[] {
+// three-mesh-bvh can return a point beyond maxThreshold (it only prunes by box distance), which made
+// rotated parts report edges 6 mm away as touching. Check the distance ourselves.
+function within(body: Body, point: Vector3, hit: HitPointInfo, tolerance: number): boolean {
+  return body.bvh.closestPointToPoint(point, hit, 0, tolerance) !== null && hit.distance <= tolerance;
+}
+
+
+// Where one body passes through another, e.g. a tube through a plate. Triangles that only touch
+// (one lies on the other's plane) are contacts, found above, not intersections.
+function intersectionSegments(bodies: Body[], normals: Float64Array, tolerance: number, hidden: Uint8Array): Segment[] {
 
   const segments: Segment[] = [];
   const line = new Line3();
@@ -244,12 +326,13 @@ function intersectionSegments(bodies: Body[], normals: Float64Array, tolerance: 
     for (let j = i + 1; j < bodies.length; j++) {
 
       const A = bodies[i]!, B = bodies[j]!;
-      if (!A.box.intersectsBox(B.box)) continue;
+      if (hidden[i] || hidden[j] || !A.box.intersectsBox(B.box)) continue;
 
       A.bvh.bvhcast(B.bvh, identity, {
         intersectsTriangles: (t1, t2, i1, i2) => {
           const fa = A.faces[A.bvh.resolveTriangleIndex(i1)]!, fb = B.faces[B.bvh.resolveTriangleIndex(i2)]!;
           if (Math.abs(dotAt(normals, fa, fb)) > 0.98) return false;
+          if (!straddles(t1, t2, tolerance) || !straddles(t2, t1, tolerance)) return false;
           if (t1.intersectsTriangle(t2, line) && line.distance() > tolerance) {
             segments.push({ a: line.start.toArray() as [number, number, number], b: line.end.toArray() as [number, number, number], normalA: normalOf(normals, fa), normalB: normalOf(normals, fb) });
           }
@@ -260,6 +343,15 @@ function intersectionSegments(bodies: Body[], normals: Float64Array, tolerance: 
   }
 
   return segments;
+}
+
+
+// True when the triangle has corners clearly on both sides of the other triangle's plane.
+const straddlePlane = new Plane();
+function straddles(tri: Triangle, other: Triangle, tolerance: number): boolean {
+  other.getPlane(straddlePlane);
+  const d = [tri.a, tri.b, tri.c].map((p) => straddlePlane.distanceToPoint(p));
+  return Math.min(...d) < -tolerance && Math.max(...d) > tolerance;
 }
 
 
@@ -333,6 +425,11 @@ function dedupe(candidates: SeamCandidate[], distance: number): SeamCandidate[] 
   }
 
   return candidates.filter((c) => kept.includes(c));
+}
+
+// The same line, e.g. a picked edge that a detected candidate also follows.
+export function samePath(a: SeamPath, b: SeamPath, distance: number): boolean {
+  return Math.abs(a.length - b.length) <= 0.15 * Math.max(a.length, b.length) && lies(a, b, distance) && lies(b, a, distance);
 }
 
 function lies(a: SeamPath, on: SeamPath, distance: number): boolean {

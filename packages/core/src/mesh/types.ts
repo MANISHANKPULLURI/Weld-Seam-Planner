@@ -25,6 +25,7 @@ export type StlFormat = "binary" | "ascii";
 
 export type ParsedStl = {
   positions: Float32Array;
+  normals: Float32Array | null;
   format: StlFormat;
   triangleCount: number;
   solids: number;

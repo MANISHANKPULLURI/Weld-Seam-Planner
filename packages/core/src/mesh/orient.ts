@@ -1,106 +1,86 @@
-import { BufferAttribute, BufferGeometry, DoubleSide, Ray, Vector3 } from "three";
-import { MeshBVH } from "three-mesh-bvh";
-import { BOUNDARY } from "./topology.ts";
 import type { Topology } from "./topology.ts";
-import { diagonalOf } from "./bounds.ts";
 
 export type OrientResult = {
   indices: Uint32Array;
   flipped: number;
-  conflicts: number;
+  inconsistentEdges: number;
   patches: number;
 };
 
-export type OrientOptions = { rayVote?: boolean; onProgress?: (fraction: number) => void };
+// fileNormals: the normals stored in the STL, one per triangle (zero when missing).
+// islands: false skips island flipping, for meshes that are already oriented (repair).
+export type OrientOptions = { onProgress?: (fraction: number) => void; fileNormals?: Float32Array | null; islands?: boolean };
 
-const RAY_SAMPLES = 24;
+type Patch = { faces: number[]; open: number; neighbours: Map<number, number>; min: number[]; max: number[] };
 
-// Winding is propagated only across manifold edges. Closed patches are turned outward by signed
-// volume. Open patches are tested with rays cast both ways from sample faces: a ray that leaves an
-// odd number of surfaces behind it started inside. Patches with no usable rays keep the
-// orientation most of their original faces already had.
+// Components are faces joined across manifold edges.
+// - A closed component (a watertight shell) gets classic winding propagation, then the file's majority
+//   winding, then signed volume: negative volume flips it, unless it sits inside another shell (a cavity).
+// - An open component (cracks, assemblies) is split into patches whose winding already agrees; a patch
+//   flips only when at least half of its border disagrees with one larger patch, i.e. an island of
+//   reversed faces. Propagating across assembly junctions flipped 22% of a correctly wound 108-body
+//   file (ray voting did no better), so open parts keep the file's winding everywhere else.
 export function orientFaces(vertices: Float32Array, indices: Uint32Array, topology: Topology, options: OrientOptions = {}): OrientResult {
 
   const faceCount = indices.length / 3;
-  const rayVote = options.rayVote ?? true;
   const onProgress = options.onProgress ?? (() => {});
+  const twin = topology.twin;
 
+  const usable = new Uint8Array(faceCount * 3);
+  for (let h = 0; h < faceCount * 3; h++) {
+    const t = twin[h]!;
+    if (t > h && !folded(vertices, indices, h, t)) usable[h] = usable[t] = 1;
+  }
+
+  const component = new Int32Array(faceCount).fill(-1);
   const flip = new Uint8Array(faceCount);
-  const visited = new Uint8Array(faceCount);
-  const queue = new Int32Array(faceCount);
-  const diagonal = diagonalOf(vertices);
-
-  let bvh: MeshBVH | null = null;
-  let conflicts = 0;
-  let patches = 0;
-  let processed = 0;
+  const closedShells: Patch[] = [];
+  const shellFaces: number[][] = [];
+  const openComponents: number[][] = [];
+  const stack: number[] = [];
+  let inconsistentEdges = 0;
 
   for (let seed = 0; seed < faceCount; seed++) {
 
-    if (visited[seed]) continue;
+    if (component[seed]! >= 0) continue;
 
-    patches++;
-    visited[seed] = 1;
+    const id = closedShells.length + openComponents.length;
+    const faces: number[] = [];
+    let closed = true;
+    component[seed] = id;
+    stack.push(seed);
 
-    let head = 0;
-    let tail = 0;
-    let open = false;
-
-    queue[tail++] = seed;
-
-    while (head < tail) {
-
-      const f = queue[head++]!;
-
+    while (stack.length) {
+      const f = stack.pop()!;
+      faces.push(f);
       for (let k = 0; k < 3; k++) {
-
         const h = f * 3 + k;
-        const t = topology.twin[h]!;
-
-        if (t === BOUNDARY) { open = true; continue; }
-        if (t < 0) continue;
-
-        const g = (t / 3) | 0;
-        const sameDirection = indices[h] === indices[t];
-        const required = sameDirection ? 1 - flip[f]! : flip[f]!;
-
-        if (visited[g]) {
-          if (flip[g] !== required) conflicts++;
-          continue;
-        }
-
-        flip[g] = required;
-        visited[g] = 1;
-        queue[tail++] = g;
+        if (!usable[h]) { closed = false; continue; }
+        const t = twin[h]!, g = (t / 3) | 0;
+        if (indices[h] === indices[t] && h < t) inconsistentEdges++;
+        if (component[g]! < 0) { component[g] = id; stack.push(g); }
       }
     }
 
-    let invert: boolean;
-
-    if (!open) {
-      invert = signedVolume(vertices, indices, queue, tail, flip) < 0;
-    } else {
-      let vote = 0;
-      if (rayVote && tail >= 4) {
-        bvh ??= buildBvh(vertices, indices);
-        vote = rayVotes(vertices, indices, queue, tail, flip, bvh, diagonal);
-      }
-      if (vote !== 0) {
-        invert = vote < 0;
-      } else {
-        let flippedInPatch = 0;
-        for (let i = 0; i < tail; i++) flippedInPatch += flip[queue[i]!]!;
-        invert = flippedInPatch * 2 > tail;
-      }
-    }
-
-    if (invert) {
-      for (let i = 0; i < tail; i++) flip[queue[i]!] = 1 - flip[queue[i]!]!;
-    }
-
-    processed += tail;
-    onProgress(processed / faceCount);
+    if (closed) { shellFaces.push(faces); closedShells.push({ faces, open: 0, neighbours: new Map(), ...boundsOf(vertices, indices, faces) }); }
+    else openComponents.push(faces);
   }
+
+  onProgress(0.3);
+
+  closedShells.forEach((shell) => propagate(shell.faces, indices, twin, flip));
+
+  for (const shell of closedShells) {
+    if (signedVolume(vertices, indices, shell.faces, flip) < 0 && !closedShells.some((other) => other !== shell && contains(other, shell) && inside(shell, other, vertices, indices))) {
+      for (const f of shell.faces) flip[f] = 1 - flip[f]!;
+    }
+  }
+
+  onProgress(0.6);
+
+  if (options.islands !== false) for (const faces of openComponents) flipIslands(faces, vertices, indices, twin, usable, flip, options.fileNormals ?? null);
+
+  onProgress(1);
 
   const oriented = indices.slice();
   let flipped = 0;
@@ -113,110 +93,215 @@ export function orientFaces(vertices: Float32Array, indices: Uint32Array, topolo
     oriented[f * 3 + 2] = tmp;
   }
 
-  return { indices: oriented, flipped, conflicts: conflicts / 2, patches };
+  return { indices: oriented, flipped, inconsistentEdges, patches: closedShells.length + openComponents.length };
 }
 
 
-function buildBvh(vertices: Float32Array, indices: Uint32Array): MeshBVH {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(vertices, 3));
-  geometry.setIndex(new BufferAttribute(indices, 1));
-  return new MeshBVH(geometry, { indirect: true });
+// Breadth-first winding propagation from the first face, then keep whichever way most faces already were.
+function propagate(faces: number[], indices: Uint32Array, twin: Int32Array, flip: Uint8Array) {
+
+  const seen = new Set<number>([faces[0]!]);
+  const queue = [faces[0]!];
+
+  for (let i = 0; i < queue.length; i++) {
+    const f = queue[i]!;
+    for (let k = 0; k < 3; k++) {
+      const h = f * 3 + k, t = twin[h]!;
+      if (t < 0) continue;
+      const g = (t / 3) | 0;
+      if (seen.has(g)) continue;
+      seen.add(g);
+      flip[g] = indices[h] === indices[t] ? 1 - flip[f]! : flip[f]!;
+      queue.push(g);
+    }
+  }
+
+  let flipped = 0;
+  for (const f of faces) flipped += flip[f]!;
+  if (flipped * 2 > faces.length) for (const f of faces) flip[f] = 1 - flip[f]!;
 }
 
 
-// Positive result: most informative samples face outward. Negative: most face inward.
-function rayVotes(vertices: Float32Array, indices: Uint32Array, faces: Int32Array, count: number, flip: Uint8Array, bvh: MeshBVH, diagonal: number): number {
+function flipIslands(faces: number[], vertices: Float32Array, indices: Uint32Array, twin: Int32Array, usable: Uint8Array, flip: Uint8Array, fileNormals: Float32Array | null) {
 
-  const stride = Math.max(1, Math.floor(count / RAY_SAMPLES));
-  const eps = Math.max(diagonal * 1e-6, 1e-9);
-  const ray = new Ray();
-  const point = new Vector3();
-  const normal = new Vector3();
+  const patchOf = new Map<number, number>();
+  const patches: Patch[] = [];
 
-  let outward = 0;
-  let inward = 0;
+  for (const seed of faces) {
+    if (patchOf.has(seed)) continue;
+    const id = patches.length;
+    const members: number[] = [];
+    const stack = [seed];
+    patchOf.set(seed, id);
+    while (stack.length) {
+      const f = stack.pop()!;
+      members.push(f);
+      for (let k = 0; k < 3; k++) {
+        const h = f * 3 + k, t = twin[h]!;
+        if (!usable[h] || indices[h] === indices[t]) continue;
+        const g = (t / 3) | 0;
+        if (!patchOf.has(g)) { patchOf.set(g, id); stack.push(g); }
+      }
+    }
+    patches.push({ faces: members, open: 0, neighbours: new Map(), min: [], max: [] });
+  }
 
-  for (let i = 0; i < count; i += stride) {
+  if (patches.length === 1) return;
 
-    const f = faces[i]!;
-    const a = indices[f * 3]! * 3;
-    const b = indices[f * 3 + (flip[f] ? 2 : 1)]! * 3;
-    const c = indices[f * 3 + (flip[f] ? 1 : 2)]! * 3;
+  // Only smooth borders vote: a reversed island inside a surface continues it, while a sharp
+  // disagreeing border is a junction between parts and counts as open.
+  for (const f of faces) {
+    const patch = patches[patchOf.get(f)!]!;
+    for (let k = 0; k < 3; k++) {
+      const h = f * 3 + k;
+      if (!usable[h]) { patch.open++; continue; }
+      const other = patchOf.get((twin[h]! / 3) | 0)!;
+      if (other === patchOf.get(f)) continue;
+      if (bend(vertices, indices, h, twin[h]!) > -0.866) patch.open++;
+      else patch.neighbours.set(other, (patch.neighbours.get(other) ?? 0) + 1);
+    }
+  }
 
+  const reversed = new Uint8Array(patches.length);
+  const order = patches.map((_, i) => i).sort((a, b) => patches[a]!.faces.length - patches[b]!.faces.length);
+
+  for (const id of order) {
+    const p = patches[id]!;
+    let total = p.open, bestCount = 0, best = -1;
+    for (const [other, count] of p.neighbours) {
+      total += count;
+      if (count > bestCount) { bestCount = count; best = other; }
+    }
+    if (best >= 0 && bestCount * 2 >= total && p.faces.length <= patches[best]!.faces.length && !fileAgrees(p.faces, vertices, indices, fileNormals)) reversed[id] = reversed[best] ? 0 : 1;
+  }
+
+  patches.forEach((p, id) => { if (reversed[id]) for (const f of p.faces) flip[f] = 1; });
+}
+
+
+// CAD exporters usually write normals from the true surface, so normals that agree with the
+// winding mean the winding is intentional. No stored normals (all zero) is no evidence either way.
+function fileAgrees(faces: number[], vertices: Float32Array, indices: Uint32Array, fileNormals: Float32Array | null): boolean {
+  if (!fileNormals) return false;
+  let agree = 0, disagree = 0;
+  for (const f of faces) {
+    const a = indices[f * 3]! * 3, b = indices[f * 3 + 1]! * 3, c = indices[f * 3 + 2]! * 3;
     const ux = vertices[b]! - vertices[a]!, uy = vertices[b + 1]! - vertices[a + 1]!, uz = vertices[b + 2]! - vertices[a + 2]!;
     const vx = vertices[c]! - vertices[a]!, vy = vertices[c + 1]! - vertices[a + 1]!, vz = vertices[c + 2]! - vertices[a + 2]!;
-
-    normal.set(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
-    if (normal.lengthSq() === 0) continue;
-    normal.normalize();
-
-    point.set(
-      vertices[a]! * 0.31 + vertices[b]! * 0.33 + vertices[c]! * 0.36,
-      vertices[a + 1]! * 0.31 + vertices[b + 1]! * 0.33 + vertices[c + 1]! * 0.36,
-      vertices[a + 2]! * 0.31 + vertices[b + 2]! * 0.33 + vertices[c + 2]! * 0.36,
-    );
-
-    const front = crossings(bvh, ray, point, normal, eps);
-    const back = crossings(bvh, ray, point, normal.negate(), eps);
-
-    if (front % 2 === 1 && back % 2 === 0) inward++;
-    else if (front % 2 === 0 && back % 2 === 1) outward++;
+    const d = (uy * vz - uz * vy) * fileNormals[f * 3]! + (uz * vx - ux * vz) * fileNormals[f * 3 + 1]! + (ux * vy - uy * vx) * fileNormals[f * 3 + 2]!;
+    if (d > 0) agree++; else if (d < 0) disagree++;
   }
-
-  return outward - inward;
+  return agree > disagree;
 }
 
-
-function crossings(bvh: MeshBVH, ray: Ray, origin: Vector3, direction: Vector3, eps: number): number {
-
-  ray.origin.copy(origin).addScaledVector(direction, eps);
-  ray.direction.copy(direction);
-
-  const hits = bvh.raycast(ray, DoubleSide).map((hit) => hit.distance).sort((p, q) => p - q);
-
-  let count = 0;
-  let last = -Infinity;
-
-  for (const d of hits) {
-    if (d - last > eps * 4) count++;
-    last = d;
-  }
-
-  return count;
+// The two triangles fold onto the same side of their shared edge: two parts touching back to back,
+// not one surface. Decided from geometry, so it does not depend on the (possibly wrong) winding.
+function folded(vertices: Float32Array, indices: Uint32Array, h: number, t: number): boolean {
+  return bend(vertices, indices, h, t) > 0.95;
 }
 
+// Cosine between the two triangles' directions away from their shared edge, from geometry alone:
+// -1 means one flat surface continuing, 0 a right-angle corner, +1 folded flat onto each other.
+function bend(vertices: Float32Array, indices: Uint32Array, h: number, t: number): number {
 
-function signedVolume(vertices: Float32Array, indices: Uint32Array, faces: Int32Array, count: number, flip: Uint8Array): number {
+  const f = (h / 3) | 0, g = (t / 3) | 0;
+  const a = indices[h]!, b = indices[f * 3 + ((h % 3) + 1) % 3]!;
+  const p = opposite(indices, f, a, b), q = opposite(indices, g, a, b);
+
+  const ex = vertices[b * 3]! - vertices[a * 3]!, ey = vertices[b * 3 + 1]! - vertices[a * 3 + 1]!, ez = vertices[b * 3 + 2]! - vertices[a * 3 + 2]!;
+  const ee = ex * ex + ey * ey + ez * ez || 1;
+
+  const perp = (v: number) => {
+    const dx = vertices[v * 3]! - vertices[a * 3]!, dy = vertices[v * 3 + 1]! - vertices[a * 3 + 1]!, dz = vertices[v * 3 + 2]! - vertices[a * 3 + 2]!;
+    const along = (dx * ex + dy * ey + dz * ez) / ee;
+    return [dx - along * ex, dy - along * ey, dz - along * ez];
+  };
+
+  const u = perp(p), w = perp(q);
+  const d = u[0]! * w[0]! + u[1]! * w[1]! + u[2]! * w[2]!;
+  return d / (Math.sqrt((u[0]! ** 2 + u[1]! ** 2 + u[2]! ** 2) * (w[0]! ** 2 + w[1]! ** 2 + w[2]! ** 2)) || 1);
+}
+
+function opposite(indices: Uint32Array, face: number, a: number, b: number): number {
+  for (let k = 0; k < 3; k++) {
+    const v = indices[face * 3 + k]!;
+    if (v !== a && v !== b) return v;
+  }
+  return indices[face * 3]!;
+}
+
+// A cavity wall lies entirely inside the other shell: checked with the generalized winding number
+// (sum of solid angles, Van Oosterom & Strackee 1983) at a few of its vertices. Bounding boxes alone
+// were not enough: a rotated tube's box fits inside a crossing plate's box.
+function inside(inner: Patch, outer: Patch, vertices: Float32Array, indices: Uint32Array): boolean {
+  const step = Math.max(1, Math.floor(inner.faces.length / 3));
+  for (let i = 0; i < inner.faces.length; i += step) {
+    const v = indices[inner.faces[i]! * 3]! * 3;
+    if (Math.abs(windingNumber(vertices[v]!, vertices[v + 1]!, vertices[v + 2]!, outer.faces, vertices, indices)) < 0.5) return false;
+  }
+  return true;
+}
+
+function windingNumber(px: number, py: number, pz: number, faces: number[], vertices: Float32Array, indices: Uint32Array): number {
+  let total = 0;
+  for (const f of faces) {
+    const a = indices[f * 3]! * 3, b = indices[f * 3 + 1]! * 3, c = indices[f * 3 + 2]! * 3;
+    const ax = vertices[a]! - px, ay = vertices[a + 1]! - py, az = vertices[a + 2]! - pz;
+    const bx = vertices[b]! - px, by = vertices[b + 1]! - py, bz = vertices[b + 2]! - pz;
+    const cx = vertices[c]! - px, cy = vertices[c + 1]! - py, cz = vertices[c + 2]! - pz;
+    const la = Math.hypot(ax, ay, az), lb = Math.hypot(bx, by, bz), lc = Math.hypot(cx, cy, cz);
+    const det = ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx);
+    const div = la * lb * lc + (ax * bx + ay * by + az * bz) * lc + (bx * cx + by * cy + bz * cz) * la + (cx * ax + cy * ay + cz * az) * lb;
+    total += 2 * Math.atan2(det, div);
+  }
+  return total / (4 * Math.PI);
+}
+
+function contains(outer: Patch, inner: Patch): boolean {
+  return [0, 1, 2].every((k) => outer.min[k]! <= inner.min[k]! && outer.max[k]! >= inner.max[k]!) &&
+    [0, 1, 2].some((k) => outer.min[k]! < inner.min[k]! || outer.max[k]! > inner.max[k]!);
+}
+
+function boundsOf(vertices: Float32Array, indices: Uint32Array, faces: number[]) {
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (const f of faces) {
+    for (let k = 0; k < 3; k++) {
+      const v = indices[f * 3 + k]! * 3;
+      for (let a = 0; a < 3; a++) {
+        const x = vertices[v + a]!;
+        if (x < min[a]!) min[a] = x;
+        if (x > max[a]!) max[a] = x;
+      }
+    }
+  }
+  return { min, max };
+}
+
+function signedVolume(vertices: Float32Array, indices: Uint32Array, faces: number[], flip: Uint8Array): number {
 
   let cx = 0, cy = 0, cz = 0;
 
-  for (let i = 0; i < count; i++) {
-    const f = faces[i]!;
+  for (const f of faces) {
     for (let k = 0; k < 3; k++) {
       const v = indices[f * 3 + k]! * 3;
       cx += vertices[v]!; cy += vertices[v + 1]!; cz += vertices[v + 2]!;
     }
   }
 
-  cx /= count * 3; cy /= count * 3; cz /= count * 3;
+  const n = faces.length * 3;
+  cx /= n; cy /= n; cz /= n;
 
   let volume = 0;
 
-  for (let i = 0; i < count; i++) {
-
-    const f = faces[i]!;
+  for (const f of faces) {
     const a = indices[f * 3]! * 3;
     const b = indices[f * 3 + (flip[f] ? 2 : 1)]! * 3;
     const c = indices[f * 3 + (flip[f] ? 1 : 2)]! * 3;
-
     const ax = vertices[a]! - cx, ay = vertices[a + 1]! - cy, az = vertices[a + 2]! - cz;
     const bx = vertices[b]! - cx, by = vertices[b + 1]! - cy, bz = vertices[b + 2]! - cz;
     const qx = vertices[c]! - cx, qy = vertices[c + 1]! - cy, qz = vertices[c + 2]! - cz;
-
     volume += ax * (by * qz - bz * qy) - ay * (bx * qz - bz * qx) + az * (bx * qy - by * qx);
   }
 
   return volume / 6;
 }
-

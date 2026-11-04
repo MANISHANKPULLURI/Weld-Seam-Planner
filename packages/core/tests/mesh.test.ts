@@ -53,9 +53,9 @@ describe("topology and bodies", () => {
 
 describe("orientFaces", () => {
 
-  const orient = (tris: Tri[], rayVote = true) => {
+  const orient = (tris: Tri[]) => {
     const { vertices, indices } = indexed(tris);
-    const result = orientFaces(vertices, indices, buildTopology(indices, vertices.length / 3), { rayVote });
+    const result = orientFaces(vertices, indices, buildTopology(indices, vertices.length / 3));
     return { vertices, indices, result };
   };
 
@@ -83,14 +83,21 @@ describe("orientFaces", () => {
     expect(indices[1]).not.toBe(result.indices[1]);
   });
 
-  test("ray voting turns an inside-out open box outward", () => {
-    const openBox = OUTWARD_CUBE.filter((_, i) => i !== 4 && i !== 5).map(reversed);
-    expect(orient(openBox, true).result.flipped).toBe(10);
+  test("a hollow part's inner wall (a cavity) is not flipped", () => {
+    const hollow = [...box(0, 0, 0, 30, 30, 30), ...box(10, 10, 10, 20, 20, 20).map(reversed)];
+    expect(orient(hollow).result.flipped).toBe(0);
   });
 
-  test("without ray voting an open box falls back to the majority rule", () => {
-    const openBox = OUTWARD_CUBE.filter((_, i) => i !== 4 && i !== 5).map(reversed);
-    expect(orient(openBox, false).result.flipped).toBe(0);
+  test("a reversed triangle inside an open flat sheet is fixed", () => {
+    const sheet: Tri[] = [];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) sheet.push([[i, j, 0], [i + 1, j, 0], [i + 1, j + 1, 0]], [[i, j, 0], [i + 1, j + 1, 0], [i, j + 1, 0]]);
+    expect(orient(sheet.map((t, i) => (i === 8 ? reversed(t) : t))).result.flipped).toBe(1);
+  });
+
+  test("a well-wound assembly of touching open plates is left alone", () => {
+    const plate = OUTWARD_CUBE.filter((_, i) => i !== 4 && i !== 5);
+    const lifted = plate.map((t) => t.map(([x, y, z]) => [x, y, z + 10]) as Tri);
+    expect(orient([...plate, ...lifted]).result.flipped).toBe(0);
   });
 });
 
@@ -108,7 +115,7 @@ describe("analyseMesh and repairMesh", () => {
   test("repair closes a hole and orients outward", () => {
     const analysed = analyseMesh(binaryStl(OUTWARD_CUBE.slice(0, 10)));
     expect(analysed.health.openEdges).toBe(4);
-    const repaired = repairMesh(analysed.vertices, analysed.indices);
+    const repaired = repairMesh(analysed.vertices, analysed.orientedIndices);
     expect(repaired.stats.closed).toBe(2);
     expect(repaired.health.openEdges).toBe(0);
     expect(repaired.health.flippedFaces).toBe(0);

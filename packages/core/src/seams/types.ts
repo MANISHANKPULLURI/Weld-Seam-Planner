@@ -21,11 +21,19 @@ export type SeamCandidate = SeamPath & {
   reason: string;
 };
 
+// Limits detection to what the user is looking at. keep is a plane in file coordinates: points with
+// normal·p + constant >= 0 are kept (the section's visible side).
+export type DetectRegion = {
+  hiddenBodies?: number[];
+  keep?: { normal: [number, number, number]; constant: number } | null;
+};
+
 export type DetectOptions = {
   featureAngleDeg: number;
   minLength: number;
   contactTolerance: number;
   includeOutside: boolean;
+  region?: DetectRegion;
 };
 
 export type DetectResult = {

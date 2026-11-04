@@ -66,6 +66,26 @@ describe("detectSeams", () => {
     expect(seamId("inside_corner", { ...c, points: reversed })).toBe(c.id);
   });
 
+  test("a section keeps only the visible side and trims seams at the cut", () => {
+    const plates = [...box(0, 0, 0, 100, 200, 10), ...box(45, 0, 10, 55, 200, 60)];
+    const { candidates } = detect(plates, { region: { keep: { normal: [0, -1, 0], constant: 100 } } });
+    expect(lengths(candidates)).toEqual([10, 100, 100]);
+    expect(candidates.every((c) => Array.from(c.points).every((v, i) => i % 3 !== 1 || v <= 100 + 1e-4))).toBe(true);
+  });
+
+  test("a closed loop crossing the cut becomes the open piece on the kept side", () => {
+    const column = [...box(0, 0, 0, 100, 100, 10), ...box(40, 40, -20, 60, 60, 40)];
+    const crossing = detect(column, { region: { keep: { normal: [-1, 0, 0], constant: 50 } } }).candidates.filter((c) => c.source === "intersection");
+    expect(crossing.every((c) => !c.closed)).toBe(true);
+    expect(crossing.reduce((s, c) => s + c.length, 0)).toBeCloseTo(80, 3);
+  });
+
+  test("hidden bodies are left out of detection", () => {
+    const plates = [...box(0, 0, 0, 100, 200, 10), ...box(45, 0, 10, 55, 200, 60)];
+    expect(detect(plates, { region: { hiddenBodies: [1] } }).candidates).toEqual([]);
+    expect(detect(plates, { region: { hiddenBodies: [1] } }).featureChains.length).toBeGreaterThan(0);
+  });
+
   test("feature chains include convex and concave edges for picking", () => {
     expect(detect(box(0, 0, 0, 50, 40, 30)).featureChains.length).toBe(12);
   });

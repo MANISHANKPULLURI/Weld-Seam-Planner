@@ -3,6 +3,7 @@ import { diagonalOf } from "./bounds.ts";
 export type WeldResult = {
   vertices: Float32Array;
   indices: Uint32Array;
+  fileNormals: Float32Array | null;
   tolerance: number;
   degenerateRemoved: number;
   duplicateRemoved: number;
@@ -14,7 +15,7 @@ export function defaultWeldTolerance(diagonal: number): number {
 
 // Cells are twice the tolerance, so any neighbour within tolerance lies in the vertex's own
 // cell or the adjacent cell on the nearer side of each axis: 8 cells to search, not 27.
-export function weldVertices(positions: Float32Array, tolerance?: number, onProgress: (f: number) => void = () => {}): WeldResult {
+export function weldVertices(positions: Float32Array, tolerance?: number, onProgress: (f: number) => void = () => {}, normals: Float32Array | null = null): WeldResult {
 
   const rawCount = positions.length / 3;
   const diagonal = diagonalOf(positions);
@@ -88,6 +89,7 @@ export function weldVertices(positions: Float32Array, tolerance?: number, onProg
   const areaEpsSq = (diagonal * diagonal * 1e-14) ** 2;
 
   const kept = new Uint32Array(triangleCount * 3);
+  const keptNormals = normals ? new Float32Array(triangleCount * 3) : null;
   const triCapacity = nextPow2(Math.max(16, triangleCount * 2));
   const triMask = triCapacity - 1;
   const triTable = new Int32Array(triCapacity).fill(-1);
@@ -127,12 +129,13 @@ export function weldVertices(positions: Float32Array, tolerance?: number, onProg
 
     triTable[slot] = keptCount;
     kept[keptCount * 3] = a; kept[keptCount * 3 + 1] = b; kept[keptCount * 3 + 2] = c;
+    keptNormals?.set(normals!.subarray(t * 3, t * 3 + 3), keptCount * 3);
     keptCount++;
   }
 
   onProgress(1);
 
-  return { vertices, indices: kept.slice(0, keptCount * 3), tolerance: tol, degenerateRemoved, duplicateRemoved };
+  return { vertices, indices: kept.slice(0, keptCount * 3), fileNormals: keptNormals ? keptNormals.slice(0, keptCount * 3) : null, tolerance: tol, degenerateRemoved, duplicateRemoved };
 }
 
 
