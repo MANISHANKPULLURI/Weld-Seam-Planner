@@ -1,3 +1,4 @@
+import { StepNav } from "../components/StepNav";
 import { useStore } from "../../state/store";
 import { DropZone } from "../components/DropZone";
 import { CheckProgress } from "../components/CheckProgress";
@@ -11,6 +12,7 @@ export function PartStep() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <HealthCard />
       <OrientCard />
+      {phase === "checked" && <StepNav note="Next finds the weld seams. Going on accepts the units and up axis above." />}
     </div>
   );
   return <DropZone />;

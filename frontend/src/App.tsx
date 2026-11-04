@@ -3,6 +3,9 @@ import { Home } from "./ui/Home";
 import { AppShell } from "./ui/AppShell";
 import { PartStep } from "./ui/steps/PartStep";
 import { SeamsStep } from "./ui/steps/SeamsStep";
+import { ProceduresStep } from "./ui/steps/ProceduresStep";
+import { SequenceStep } from "./ui/steps/SequenceStep";
+import { ReviewStep } from "./ui/steps/ReviewStep";
 import Viewport from "./Viewport";
 import { useStore } from "./state/store";
 
@@ -27,7 +30,7 @@ export default function App() {
   if (hash === "#/") return <Home />;
   return (
     <AppShell viewport={<Viewport />}>
-      {step === "seams" ? <SeamsStep /> : <PartStep />}
+      {step === "seams" ? <SeamsStep /> : step === "procedures" ? <ProceduresStep /> : step === "sequence" ? <SequenceStep /> : step === "review" ? <ReviewStep /> : <PartStep />}
     </AppShell>
   );
 }

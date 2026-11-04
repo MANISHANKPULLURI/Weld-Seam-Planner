@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { MM_PER_UNIT, measure, partSizeMm } from "@weld/core";
+import { MM_PER_UNIT, locateAlong, measure, partSizeMm, splitAtDistances } from "@weld/core";
 import { SceneController } from "./viewer/SceneController";
+import { seamColor } from "./viewer/seamColors";
 import type { SurfacePoint } from "./viewer/SceneController";
 import type { ViewId } from "./state/store";
-import { candidateVisible, inWorkArea, mergeTargets, seamLengthMm, useStore } from "./state/store";
+import { candidateVisible, inWorkArea, mergeTargets, orderedSeams, seamLengthMm, useStore } from "./state/store";
 import { ViewControls } from "./ui/components/ViewControls";
+import { WeldPlayer } from "./ui/components/WeldPlayer";
 import { OrientationGizmo } from "./viewer/OrientationGizmo";
 import { formatSize } from "./domain/mesh/describe";
 
@@ -17,6 +19,22 @@ function draftPath(all: DraftPoint[]) {
   const points = all.filter((p, i) => i === 0 || p.point.some((v, k) => v !== all[i - 1]!.point[k]));
   const flat = (key: "point" | "normal") => new Float32Array(points.flatMap((p) => p[key]));
   return measure({ points: flat("point"), normalsA: flat("normal"), normalsB: flat("normal"), closed: false, length: 0 });
+}
+
+function distanceAlong(path: { points: Float32Array }, segment: number, t: number) {
+  const p = path.points, n = p.length / 3;
+  let d = 0;
+  for (let i = 0; i < segment; i++) d += Math.hypot(p[i * 3 + 3]! - p[i * 3]!, p[i * 3 + 4]! - p[i * 3 + 1]!, p[i * 3 + 5]! - p[i * 3 + 2]!);
+  const j = (segment + 1) % n;
+  return d + t * Math.hypot(p[j * 3]! - p[segment * 3]!, p[j * 3 + 1]! - p[segment * 3 + 1]!, p[j * 3 + 2]! - p[segment * 3 + 2]!);
+}
+
+// Box around some seams, padded so the surroundings show; part (file) coordinates.
+function seamsBox(list: { points: Float32Array }[], diag: number) {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity], max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (const x of list) for (let i = 0; i < x.points.length; i++) { const k = i % 3, v = x.points[i]!; if (v < min[k]!) min[k] = v; if (v > max[k]!) max[k] = v; }
+  const pad = Math.max(diag * 0.04, Math.max(...max.map((v, k) => v - min[k]!)) * 0.35);
+  return { min: min.map((v) => v - pad) as [number, number, number], max: max.map((v) => v + pad) as [number, number, number] };
 }
 
 function isTyping(target: EventTarget | null) {
@@ -51,8 +69,9 @@ export default function Viewport() {
   const candidateFilter = useStore((s) => s.candidateFilter);
   const workArea = useStore((s) => s.workArea);
 
-  const seamTools = step === "seams";
-  const activeTool = seamTools ? tool : "select";
+  // Seams step: all tools. Procedures step: click to select a seam only.
+  const seamTools = step !== "part";
+  const activeTool = step === "seams" ? tool : "select";
 
   useEffect(() => {
     const host = hostRef.current;
@@ -73,8 +92,38 @@ export default function Viewport() {
     ctrlRef.current?.setSnapMarker(null);
   }, [activeTool]);
 
+  const sequence = useStore((s) => s.sequence);
+
+  // Sequence and Review show the welding order on the part.
+  useEffect(() => {
+    const c = ctrlRef.current;
+    if (!c) return;
+    if (step !== "sequence" && step !== "review") { c.setSequence(null); return; }
+    c.setSequence(orderedSeams({ seams, sequence }).map((x) => ({ points: x.points, closed: x.closed })));
+  }, [step, seams, sequence]);
+
   const pendingAction = useStore((s) => s.pendingAction);
-  useEffect(() => { if (pendingAction !== "split") ctrlRef.current?.setSnapMarker(null); }, [pendingAction]);
+  const splitCuts = useStore((s) => s.splitCuts);
+
+  // Opening Split zooms to the seam so the preview is easy to see.
+  useEffect(() => {
+    if (pendingAction !== "split") return;
+    const s = useStore.getState();
+    const seam = s.seams.find((x) => x.id === s.selectedSeamId);
+    const size = s.health?.bounds.size;
+    if (seam && size) { const box = seamsBox([seam], Math.hypot(size.x, size.y, size.z)); ctrlRef.current?.fitBox(box.min, box.max); }
+  }, [pendingAction]);
+
+  // Live split preview from the cut positions (mm from the start).
+  useEffect(() => {
+    const c = ctrlRef.current;
+    if (!c) return;
+    const seam = seams.find((x) => x.id === selectedSeamId);
+    if (pendingAction !== "split" || !splitCuts || !seam) { c.setSplitPreview([], []); return; }
+    const scale = MM_PER_UNIT[frame.units];
+    const units = splitCuts.map((d) => d / scale);
+    c.setSplitPreview(splitAtDistances(seam, units), units.map((d) => locateAlong(seam, d).point));
+  }, [pendingAction, splitCuts, seams, selectedSeamId, frame.units]);
 
   useEffect(() => {
     const c = ctrlRef.current;
@@ -89,15 +138,56 @@ export default function Viewport() {
     setGridMm(mesh ? c.getGridInterval() : null);
   }, [mesh]);
 
+  const focus = useStore((s) => s.focus);
+
+  // Hidden bodies are dropped; in focus mode the focused bodies stay solid and the rest is a ghost.
   useEffect(() => {
     const c = ctrlRef.current;
     if (!c || !mesh) return;
-    if (hiddenBodies.length === 0) { c.setIndices(mesh.orientedIndices); return; }
+    const focused = focus && focus.bodies.length ? new Set(focus.bodies) : null;
+    if (hiddenBodies.length === 0 && !focused) { c.setIndices(mesh.orientedIndices); c.setGhost(null); return; }
     const hidden = new Set(hiddenBodies);
-    const kept: number[] = [];
-    mesh.bodyOfTriangle.forEach((b, f) => { if (!hidden.has(b)) kept.push(mesh.orientedIndices[f * 3]!, mesh.orientedIndices[f * 3 + 1]!, mesh.orientedIndices[f * 3 + 2]!); });
+    const kept: number[] = [], ghost: number[] = [];
+    mesh.bodyOfTriangle.forEach((b, f) => {
+      if (hidden.has(b)) return;
+      (focused && !focused.has(b) ? ghost : kept).push(mesh.orientedIndices[f * 3]!, mesh.orientedIndices[f * 3 + 1]!, mesh.orientedIndices[f * 3 + 2]!);
+    });
     c.setIndices(Uint32Array.from(kept));
-  }, [hiddenBodies, mesh]);
+    c.setGhost(ghost.length ? Uint32Array.from(ghost) : null);
+  }, [hiddenBodies, mesh, focus]);
+
+  useEffect(() => { if (focus) ctrlRef.current?.fitBox(focus.box.min, focus.box.max); }, [focus]);
+
+  const cameraTarget = useStore((s) => s.cameraTarget);
+  useEffect(() => {
+    if (!cameraTarget) return;
+    const s = useStore.getState();
+    const list = s.seams.filter((x) => cameraTarget.ids.includes(x.id));
+    const size = s.health?.bounds.size;
+    if (list.length && size) { const box = seamsBox(list, Math.hypot(size.x, size.y, size.z)); ctrlRef.current?.fitBox(box.min, box.max); }
+  }, [cameraTarget]);
+
+  const undo = useStore((s) => s.undo);
+  const [undoVisible, setUndoVisible] = useState(false);
+  useEffect(() => {
+    if (!undo) { setUndoVisible(false); return; }
+    setUndoVisible(true);
+    // Pulse what just changed: new seams (split pieces, merge result) or the reversed seam.
+    const before = new Set(undo.state.seams.map((x) => x.id));
+    const now = useStore.getState();
+    const changed = now.seams.filter((x) => x.status === "accepted" && !before.has(x.id)).map((x) => x.id);
+    const ids = changed.length ? changed : now.selectedSeamId ? [now.selectedSeamId] : [];
+    const list = now.seams.filter((x) => ids.includes(x.id));
+    const size = now.health?.bounds.size;
+    // Zoom to what changed so a small seam's edit is visible, then pulse and label it.
+    if (list.length && size && !undo.label.startsWith("Deleted")) {
+      const box = seamsBox(list, Math.hypot(size.x, size.y, size.z));
+      ctrlRef.current?.fitBox(box.min, box.max);
+    }
+    requestAnimationFrame(() => ctrlRef.current?.flashSeams(ids, undo.label.startsWith("Reversed")));
+    const t = setTimeout(() => setUndoVisible(false), 8000);
+    return () => clearTimeout(t);
+  }, [undo]);
 
   useEffect(() => {
     const c = ctrlRef.current;
@@ -107,9 +197,10 @@ export default function Viewport() {
   }, [frame.units, frame.upAxis, mesh]);
 
   useEffect(() => {
-    const shown = seams.filter((s) => candidateVisible(s, candidateFilter, frame.units) && inWorkArea(s, workArea));
-    ctrlRef.current?.setSeams(shown.map((s) => ({ id: s.id, points: s.points, closed: s.closed, status: s.status })));
-  }, [seams, candidateFilter, frame.units, workArea]);
+    const shown = seams.filter((s) => (step === "seams" ? candidateVisible(s, candidateFilter, frame.units) : s.status === "accepted") && inWorkArea(s, workArea));
+    ctrlRef.current?.setSeamNames(new Map(shown.map((s) => [s.id, s.name])));
+    ctrlRef.current?.setSeams(shown.map((s) => ({ id: s.id, points: s.points, closed: s.closed, status: s.status, color: seamColor(s) })));
+  }, [seams, candidateFilter, frame.units, workArea, step]);
 
   useEffect(() => { ctrlRef.current?.setSeamHighlight(selectedSeamId, hoverId); }, [selectedSeamId, hoverId, seams]);
   useEffect(() => { ctrlRef.current?.setXray(xray); }, [xray]);
@@ -166,8 +257,10 @@ export default function Viewport() {
         else if (e.key === "Escape") { setDraft([]); ctrlRef.current?.setSeamPreview(null); ctrlRef.current?.setSnapMarker(null); }
         return;
       }
-      if (e.key === "Escape") { if (s.pendingAction) s.setPendingAction(null); else s.selectSeam(null); }
-      if ((e.key === "Delete" || e.key === "Backspace") && s.selectedSeamId) { e.preventDefault(); s.deleteSeam(s.selectedSeamId); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && s.undo) { e.preventDefault(); s.undoLast(); return; }
+      if (e.key === "Escape") { if (s.pendingAction) s.setPendingAction(null); else if (s.selectedSeamId) s.selectSeam(null); else if (s.focus) s.setFocus(null); }
+      if (e.key === "Enter" && s.pendingAction === "split" && s.selectedSeamId) { e.preventDefault(); s.splitSeamAt(s.selectedSeamId, s.splitCuts ?? []); return; }
+      if ((e.key === "Delete" || e.key === "Backspace") && s.selectedSeamId && s.step === "seams") { e.preventDefault(); s.deleteSeam(s.selectedSeamId); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -186,8 +279,11 @@ export default function Viewport() {
       const s = useStore.getState();
       const selected = s.pendingAction === "split" ? s.seams.find((x) => x.id === s.selectedSeamId) : undefined;
       if (activeTool === "select" && selected) {
-        const hit = c.pickPath([selected], { clientX, clientY }, 12);
-        c.setSnapMarker(hit ? (c.toPart(hit.world)) : null, "split");
+        // One cut follows the cursor along the seam; equal parts ignore the cursor.
+        if ((s.splitCuts?.length ?? 0) <= 1) {
+          const hit = c.pickPath([selected], { clientX, clientY }, 24);
+          if (hit) s.setSplitCuts([Math.round(distanceAlong(selected, hit.segment, hit.t) * MM_PER_UNIT[s.frame.units] * 10) / 10]);
+        }
       } else if (activeTool === "select") {
         setHoverId(c.pickSeam({ clientX, clientY }));
       } else if (activeTool === "edge") {
@@ -228,21 +324,16 @@ export default function Viewport() {
 
     const selected = s.seams.find((x) => x.id === s.selectedSeamId);
     if (s.pendingAction === "split" && selected) {
-      const hit = c.pickPath([selected], e, 12);
-      if (!hit) { setNotice("Click on the orange seam where it should be cut."); return; }
-      const before = new Set(s.seams.map((x) => x.id));
-      s.splitSeam(selected.id, hit.segment, hit.t);
+      if ((s.splitCuts?.length ?? 0) <= 1) {
+        const hit = c.pickPath([selected], e, 24);
+        if (!hit) { setNotice("Click on the orange seam, or use the slider in the panel."); return; }
+        s.setSplitCuts([distanceAlong(selected, hit.segment, hit.t) * MM_PER_UNIT[s.frame.units]]);
+      }
+      const ids = useStore.getState().splitSeamAt(selected.id, useStore.getState().splitCuts ?? []);
       const after = useStore.getState();
-      const parts = after.seams.filter((x) => !before.has(x.id));
-      // Show the result: first piece selected (orange), second lit up, a big dot at the cut, for a moment.
-      if (parts.length === 2) {
-        const p = parts[0]!.points, n = p.length / 3;
-        c.setSnapMarker([p[n * 3 - 3]!, p[n * 3 - 2]!, p[n * 3 - 1]!], "split");
-        setHoverId(parts[1]!.id);
-        setTimeout(() => { setHoverId(null); ctrlRef.current?.setSnapMarker(null); }, 2500);
-      } else c.setSnapMarker(null);
-      if (parts.length === 2) setNotice(`Cut into ${parts.map((x) => `${x.name} (${seamLengthMm(x, after.frame.units).toFixed(1)} mm)`).join(" and ")}. The dot marks the new joint.`);
-      else if (parts.length === 1) setNotice(`Loop opened at that point: ${parts[0]!.name} now starts and ends there.`);
+      const parts = after.seams.filter((x) => ids.includes(x.id));
+      if (parts.length > 1) setNotice(`Cut into ${parts.map((x) => `${x.name} (${seamLengthMm(x, after.frame.units).toFixed(1)} mm)`).join(", ")}.`);
+      else if (parts.length === 1) setNotice(`Loop opened: ${parts[0]!.name} now starts and ends at the cut.`);
       return;
     }
     if (s.pendingAction === "merge" && selected) {
@@ -259,7 +350,7 @@ export default function Viewport() {
   const drawHint = activeTool === "draw" ? (draft.length === 0 ? `Click on the part to start a seam. Points snap to seam ends, corners and edges.${snapText}` : `${draft.length} point${draft.length === 1 ? "" : "s"}.${snapText} Enter or double-click to finish, Backspace to undo, Esc to cancel.`) : null;
   const pending = useStore((s) => s.pendingAction);
   const mergeNames = useStore((s) => (s.pendingAction === "merge" && s.selectedSeamId ? mergeTargets(s.seams, s.selectedSeamId).map((x) => x.name).join(" or ") : ""));
-  const pendingHint = pending === "split" ? "Move along the orange seam: the dot shows where it will be cut. Click to cut. Esc to cancel." : pending === "merge" ? `Click ${mergeNames || "a touching seam"} to join it. Esc to cancel.` : null;
+  const pendingHint = pending === "split" ? "Move along the seam: the cut follows. The lighter part is the new seam. Click or press Split to cut, Esc to cancel." : pending === "merge" ? `Click ${mergeNames || "a touching seam"} to join it. Esc to cancel.` : null;
 
   return (
     <div className={`viewport-wrapper${activeTool !== "select" ? " viewport-host-draw" : ""}`}>
@@ -277,6 +368,20 @@ export default function Viewport() {
         <OrientationGizmo controller={ctrl} onView={(id: ViewId) => { setView(id); ctrl?.setView(id); }} />
       </div>
       {(phase === "analysing" || phase === "repairing") && <div className="scanline" aria-hidden="true" />}
+      {(step === "sequence" || step === "review") && <WeldPlayer controller={ctrl} />}
+      {focus && (
+        <div className="view-chip focus-chip" role="status">
+          <span>Focused on <strong>{focus.label}</strong>{focus.bodies.length ? `, ${focus.bodies.length} part${focus.bodies.length === 1 ? "" : "s"}` : ""}</span>
+          <button type="button" className="btn-link" onClick={() => { useStore.getState().setFocus(null); ctrlRef.current?.fitModel(true); }}>Show all</button>
+        </div>
+      )}
+      {undo && undoVisible && (
+        <div className="undo-toast" role="status">
+          <span>{undo.label}.</span>
+          <button type="button" className="btn-link" onClick={() => { useStore.getState().undoLast(); setUndoVisible(false); }}>Undo</button>
+          <span className="undo-key">Ctrl/⌘ Z</span>
+        </div>
+      )}
       {(drawHint || pendingHint || notice) && <div className="viewport-hint" role="status">{notice ?? pendingHint ?? drawHint}</div>}
       {sizeMm && (
         <div className="view-chip view-controls-bottom-left">

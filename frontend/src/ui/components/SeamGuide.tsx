@@ -16,7 +16,7 @@ export function SeamGuide() {
 
   const steps = [
     { done: detected, title: "Find seams", text: "Press Detect seams. Suggestions appear as dashed lines on the part." },
-    { done: detected && accepted > 0 && candidates === 0, title: "Keep the real welds", text: "In the list, ✓ keeps a suggestion, ✕ drops it. Kept ones turn solid green." },
+    { done: detected && accepted > 0 && candidates === 0, title: "Keep the real welds", text: "In the list, ✓ keeps a suggestion, ✕ drops it. Kept ones turn solid, each in its own colour." },
     { done: false, title: "Fix or add (optional)", text: "Click a seam to rename, reverse, split, merge or delete it. Use Pick edge or Draw for seams that were missed." },
   ];
 

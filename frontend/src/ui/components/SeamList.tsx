@@ -1,3 +1,4 @@
+import { seamColor } from "../../viewer/seamColors";
 import { candidateVisible, inWorkArea, seamLengthMm, useStore } from "../../state/store";
 import type { SeamSource } from "@weld/core";
 import type { Seam } from "../../state/store";
@@ -23,7 +24,7 @@ function SeamRow({ seam }: { seam: Seam }) {
   return (
     <li className={`seam-row${selected ? " seam-row-selected" : ""}`}>
       <button type="button" className="seam-row-main" onClick={() => selectSeam(selected ? null : seam.id)} aria-pressed={selected}>
-        <span className={`seam-swatch${candidate ? " seam-swatch-candidate" : ""}`} aria-hidden="true" />
+        <span className={`seam-swatch${candidate ? " seam-swatch-candidate" : ""}`} style={candidate ? undefined : { background: seamColor(seam) }} aria-hidden="true" />
         <span className="seam-row-name" title={JOINT_HELP[seam.jointType]}>{candidate ? JOINT_LABEL[seam.jointType] : seam.name}</span>
         <span className="seam-row-meta">{candidate ? seam.reason : MANUAL[seam.source] ?? JOINT_LABEL[seam.jointType]}</span>
         <span className="seam-row-length numeric">{seamLengthMm(seam, units).toFixed(1)} mm</span>
@@ -90,7 +91,7 @@ export function SeamList() {
           <div><dt>Butt / corner weld</dt><dd>Plates edge to edge, or meeting at an outside corner.</dd></div>
           <div><dt>Inside corner, 90°</dt><dd>Where it was found, and the angle between the two surfaces.</dd></div>
           <div><dt>Plates touch / Intersections</dt><dd>Two separate parts resting on, or passing through, each other.</dd></div>
-          <div><dt>Dashed line</dt><dd>A suggestion. ✓ keeps it (solid green), ✕ drops it.</dd></div>
+          <div><dt>Dashed line</dt><dd>A suggestion. ✓ keeps it (solid line, own colour), ✕ drops it.</dd></div>
         </dl>
       </details>
 

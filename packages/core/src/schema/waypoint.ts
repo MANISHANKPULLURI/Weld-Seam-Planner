@@ -17,6 +17,7 @@ export const waypointSchema = z.object({
   torch_axis: vec3.describe("Torch axis unit vector pointing from torch toward weld"),
 
   contact_tip_mm: vec3.describe("Contact tip position in millimetres"),
+  tool_quaternion_xyzw: z.tuple([z.number(), z.number(), z.number(), z.number()]).describe("Tool frame orientation: z = torch axis (toward the weld), x = travel direction projected, y = z × x"),
 
 }).describe("Seam waypoint with frame");
 

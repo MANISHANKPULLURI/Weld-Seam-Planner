@@ -55,7 +55,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
         <ol className="planner-steps" aria-label="Steps">
           {STEPS.map((s, idx) => {
             const isActive = step === s.id;
-            const isLocked = s.id !== "part" && (!checked || !frame.confirmed);
+            const isLocked = s.id !== "part" && !checked;
             return (
               <li key={s.id}>
                 <button
@@ -63,7 +63,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
                   className={`planner-step${isActive ? " planner-step-active" : ""}${isLocked ? " planner-step-locked" : ""}`}
                   aria-current={isActive ? "step" : undefined}
                   aria-disabled={isLocked}
-                  title={isLocked ? (checked ? "Confirm units and up axis first" : "Load a part first") : undefined}
+                  title={isLocked ? "Load a part first" : undefined}
                   onClick={() => { if (!isLocked) setStep(s.id); }}
                   disabled={isLocked}
                 >

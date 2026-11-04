@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { JOINT_HELP } from "./SeamList";
+import { SplitPanel } from "./SplitPanel";
+import { focusForSeam } from "../../lib/focus";
 import { mergeTargets, seamLengthMm, useStore } from "../../state/store";
 
 const ACTION_HELP = {
@@ -34,7 +36,10 @@ export function SeamDetails() {
         {candidate
           ? <span className="result-title">Candidate</span>
           : <input className="field-control seam-name-input" value={seam.name} aria-label="Seam name" onChange={(e) => renameSeam(seam.id, e.target.value)} />}
-        <button type="button" className="btn-link" onClick={() => selectSeam(null)}>Close</button>
+        <span className="seam-head-actions">
+          <button type="button" className="btn-link" onClick={() => { const mesh = useStore.getState().mesh; if (mesh) useStore.getState().setFocus(focusForSeam(mesh, seam)); }} title="Zoom to this seam and fade parts it does not touch">Focus</button>
+          <button type="button" className="btn-link" onClick={() => selectSeam(null)}>Close</button>
+        </span>
       </header>
 
       <dl className="health-summary">
@@ -62,17 +67,18 @@ export function SeamDetails() {
           <button type="button" className="btn-ghost btn-danger" onMouseEnter={() => setHelp("delete")} onMouseLeave={() => setHelp(null)} onFocus={() => setHelp("delete")} onBlur={() => setHelp(null)} onClick={() => deleteSeam(seam.id)} title="Remove this seam. Detection will not suggest it again.">Delete</button>
         </div>
       )}
-      {pending && (
+      {pending === "split" && <SplitPanel seam={seam} />}
+      {pending === "merge" && (
         <div className="seam-mode-box" role="status">
-          <strong>{pending === "split" ? "Split is on." : "Merge is on."}</strong>{" "}
-          {pending === "split" ? "Move along the orange seam on the part, a dot shows the cut. Click on the line to cut it." : `Click ${targets.map((t) => t.name).join(" or ")} on the part to join it.`}
+          <strong>Merge is on.</strong>{" "}
+          {`Click ${targets.map((t) => t.name).join(" or ")} on the part to join it.`}
           {" "}Esc or the button again cancels.
         </div>
       )}
       {!candidate && !pending && help && <p className="result-explainer seam-action-help">{ACTION_HELP[help]}</p>}
       {!candidate && !pending && !help && (
         <p className="result-explainer">
-          {seam.closed ? "Closed loop: welded all the way round." : "The dot marks where welding starts, the arrow where it ends."}
+          {seam.closed ? "Closed loop: welded all the way round, in the direction of the small arrows." : "Welding starts at the big dot and runs along the small arrows to the end arrow."}
           {!seam.closed && (targets.length ? ` Can merge with ${targets.map((t) => t.name).join(", ")}.` : " No seam touches its ends, so Merge is off.")}
         </p>
       )}

@@ -1,7 +1,9 @@
+import { useStore } from "../state/store";
 import { Logo } from "./Logo";
 import { LockIcon } from "./icons";
 
 export function Home() {
+  const savedPart = useStore((st) => (st.phase === "checked" ? st.part?.fileName ?? null : null));
   const toggle = () => {
     const cur = document.documentElement.getAttribute("data-theme") || "dark";
     const next = cur === "dark" ? "light" : "dark";
@@ -21,7 +23,7 @@ export function Home() {
         <div className="home-column">
           <h1 className="home-title">Plan robotic welds from a 3D part</h1>
           <p className="home-subtitle">Load an STL, pick the seams, set how each one is welded, and export a job a robot controller can read.</p>
-          <a href="#/planner" className="home-cta">Open the planner</a>
+          <a href="#/planner" className="home-cta">{savedPart ? `Continue ${savedPart}` : "Open the planner"}</a>
           <div className="home-steps">
             <div className="home-step">
               <span className="home-step-num">1</span>

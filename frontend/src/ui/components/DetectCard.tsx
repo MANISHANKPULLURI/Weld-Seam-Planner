@@ -52,7 +52,12 @@ export function DetectCard() {
       <p className="result-explainer detect-scope">
         {scope ? `Searches only ${scope}. Choose Whole model and show all parts to search everything.` : "Searches the whole model. To work on one area, cut a Section and choose Work here only, or hide parts."}
       </p>
-      <button type="button" className="btn-primary btn-block" onClick={detectWithSettings} disabled={running}>
+      {detection.status === "done" && candidates > 0 && (
+        <button type="button" className="btn-primary btn-block" onClick={() => useStore.getState().setReviewing(true)} title="See each suggestion up close and keep or drop it">
+          Review {candidates} one by one
+        </button>
+      )}
+      <button type="button" className={`${detection.status === "done" && candidates > 0 ? "btn-secondary" : "btn-primary"} btn-block`} onClick={detectWithSettings} disabled={running}>
         {scope ? "Detect in this area" : detection.status === "idle" ? "Detect seams" : "Detect again"}
       </button>
     </section>

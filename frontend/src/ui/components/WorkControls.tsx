@@ -6,6 +6,8 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digi
 export function WorkControls() {
   const ready = useStore((s) => s.initial !== null && (s.phase === "checked" || s.phase === "error"));
   const checkpoint = useStore((s) => s.checkpoint);
+  const saveStatus = useStore((s) => s.saveStatus);
+  const savedAt = useStore((s) => s.savedAt);
   const { saveCheckpoint, restoreCheckpoint, resetToInitial } = useStore.getState();
   const [open, setOpen] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -31,6 +33,9 @@ export function WorkControls() {
 
   return (
     <div className="work-controls" ref={menuRef}>
+      <span className={`save-status save-${saveStatus}`} role="status" title="Your work is saved in this browser automatically">
+        {saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? "Not saved" : savedAt ? `Saved ${time(savedAt)}` : ""}
+      </span>
       <button type="button" className="planner-collapse-btn" onClick={() => { saveCheckpoint(); setJustSaved(true); }} title={checkpoint ? `Last saved at ${time(checkpoint.savedAt)}` : "Save the current work so you can come back to it"}>
         {justSaved ? "Saved" : "Save checkpoint"}
       </button>

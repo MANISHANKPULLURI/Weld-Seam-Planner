@@ -90,3 +90,21 @@ describe("detectSeams", () => {
     expect(detect(box(0, 0, 0, 50, 40, 30)).featureChains.length).toBe(12);
   });
 });
+
+describe("split helpers", async () => {
+  const { locateAlong, splitAtDistances, measure } = await import("../src/index.ts");
+  const line = measure({ points: new Float32Array([0, 0, 0, 10, 0, 0, 10, 10, 0]), normalsA: new Float32Array(9), normalsB: new Float32Array(9), closed: false, length: 0 });
+
+  test("locates a distance along the path", () => {
+    expect(locateAlong(line, 15).point).toEqual([10, 5, 0]);
+  });
+
+  test("splits into even pieces", () => {
+    expect(splitAtDistances(line, [5, 10, 15]).map((p) => Math.round(p.length))).toEqual([5, 5, 5, 5]);
+  });
+
+  test("a loop opens at the first cut, then splits", () => {
+    const loop = measure({ points: new Float32Array([0, 0, 0, 10, 0, 0, 10, 10, 0, 0, 10, 0]), normalsA: new Float32Array(12), normalsB: new Float32Array(12), closed: true, length: 0 });
+    expect(splitAtDistances(loop, [10, 30]).map((p) => Math.round(p.length))).toEqual([20, 20]);
+  });
+});

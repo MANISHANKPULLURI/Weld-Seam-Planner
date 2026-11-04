@@ -4,6 +4,8 @@ import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 import { UP_AXIS_QUATERNION_XYZW } from "@weld/core";
 import { SeamLayer } from "./SeamLayer.ts";
 import type { PathHit, SeamDrawItem } from "./SeamLayer.ts";
+import { poseAt, totalDuration, weldedPart } from "./simulation.ts";
+import type { SimSegment } from "./simulation.ts";
 import type { UpAxis } from "@weld/core";
 import { chooseEngineeringInterval, viewDirectionForId as viewDir, computeFitDistance as calcFitDistance } from "./viewMath.ts";
 
@@ -44,6 +46,9 @@ export class SceneController {
   private clipPlane = new THREE.Plane();
   private clipping: THREE.Plane[] = this.seamLayer.clipping;
   private cap: THREE.Mesh | null = null;
+  private ghost: THREE.Mesh | null = null;
+  private flowRaf = 0;
+  private sim: { segments: SimSegment[]; t: number; speed: number; playing: boolean; raf: number; onProgress: (t: number, total: number, segment: number) => void } | null = null;
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private onDblClickHandler: ((e: MouseEvent) => void) | null = null;
@@ -524,6 +529,7 @@ export class SceneController {
   }
 
   private disposePart() {
+    this.setGhost(null);
     if (this.cap) { this.partGroup.remove(this.cap); (this.cap.material as THREE.Material).dispose(); this.cap = null; }
     if (this.mesh) { this.partGroup.remove(this.mesh); this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose(); this.mesh = null; }
     if (this.triangleEdges) { this.partGroup.remove(this.triangleEdges); this.triangleEdges.geometry.dispose(); (this.triangleEdges.material as THREE.Material).dispose(); this.triangleEdges = null; }
@@ -582,6 +588,110 @@ export class SceneController {
     this.setViewMode(this.viewMode);
   }
 
+  // Focus mode: these triangles are drawn as a faint ghost so the focused part stands out.
+  setGhost(indices: Uint32Array | null) {
+    if (this.ghost) { this.partGroup.remove(this.ghost); this.ghost.geometry.dispose(); (this.ghost.material as THREE.Material).dispose(); this.ghost = null; }
+    if (indices && indices.length && this.mesh) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", (this.mesh.geometry as THREE.BufferGeometry).getAttribute("position"));
+      geo.setIndex(new THREE.BufferAttribute(indices, 1));
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshStandardMaterial({ color: (this.mesh.material as THREE.MeshStandardMaterial).color, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, clippingPlanes: this.clipping });
+      this.ghost = new THREE.Mesh(geo, mat);
+      this.ghost.raycast = () => {};
+      this.ghost.renderOrder = 5;
+      this.partGroup.add(this.ghost);
+    }
+    this.render();
+  }
+
+  // Frames a box given in part (file) coordinates.
+  fitBox(min: [number, number, number], max: [number, number, number], animate = true) {
+    this.partGroup.updateMatrixWorld();
+    const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)).applyMatrix4(this.partGroup.matrixWorld);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(size.length() / 2, 1e-3);
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    if (dir.lengthSq() < 1e-6) dir.set(0.7, -0.6, 0.7).normalize();
+    const aspect = this.size.w / Math.max(1, this.size.h);
+    const distance = Math.max(calcFitDistance({ size, sphereRadius: radius }, this.cameraPersp.fov, aspect, "perspective"), radius * 2.2);
+    if (this.projection === "orthographic" && this.bounds) {
+      this.cameraOrtho.zoom = Math.max(0.05, this.bounds.sphereRadius / radius * 0.8);
+      this.cameraOrtho.updateProjectionMatrix();
+    }
+    this.animateCamera(this.camera.position.clone(), center.clone().add(dir.multiplyScalar(distance)), this.controls.target.clone(), center, animate ? 500 : 0);
+  }
+
+  flashSeams(ids: string[], reversed = false) {
+    this.seamLayer.flashSeams(ids, reversed);
+    this.startFlow();
+  }
+
+  setSeamNames(names: Map<string, string>) {
+    this.seamLayer.names = names;
+  }
+
+  // Keeps the flowing direction arrows (and change flashes) animating.
+  private startFlow() {
+    if (this.flowRaf) return;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const active = this.seamLayer.tickFlow((now - last) / 1000);
+      last = now;
+      this.renderer.render(this.scene, this.camera);
+      this.flowRaf = active ? requestAnimationFrame(tick) : 0;
+    };
+    this.flowRaf = requestAnimationFrame(tick);
+  }
+
+  // Weld simulation: segments in order; progress is reported in real seconds.
+  setSimulation(segments: SimSegment[] | null, onProgress: (t: number, total: number, segment: number) => void = () => {}) {
+    if (this.sim) cancelAnimationFrame(this.sim.raf);
+    this.sim = segments && segments.length ? { segments, t: 0, speed: 10, playing: false, raf: 0, onProgress } : null;
+    this.drawSim();
+  }
+
+  simPlay(speed: number) {
+    const sim = this.sim;
+    if (!sim) return;
+    sim.speed = speed;
+    if (sim.t >= totalDuration(sim.segments)) sim.t = 0;
+    if (sim.playing) return;
+    sim.playing = true;
+    let last = performance.now();
+    const tick = (now: number) => {
+      if (!this.sim || !this.sim.playing) return;
+      const s = this.sim;
+      s.t = Math.min(totalDuration(s.segments), s.t + ((now - last) / 1000) * s.speed);
+      last = now;
+      this.drawSim();
+      if (s.t >= totalDuration(s.segments)) { s.playing = false; return; }
+      s.raf = requestAnimationFrame(tick);
+    };
+    sim.raf = requestAnimationFrame(tick);
+  }
+
+  simPause() { if (this.sim) { this.sim.playing = false; cancelAnimationFrame(this.sim.raf); } }
+  simSpeed(speed: number) { if (this.sim) this.sim.speed = speed; }
+  simSeek(t: number) { if (this.sim) { this.sim.t = Math.max(0, Math.min(totalDuration(this.sim.segments), t)); this.drawSim(); } }
+
+  private drawSim() {
+    const sim = this.sim;
+    if (!sim) { this.seamLayer.setSimFrame(null, [], null); this.render(); return; }
+    const pose = poseAt(sim.segments, sim.t);
+    const done: { key: number; points: Float32Array; closed: boolean }[] = [];
+    let partial: Float32Array | null = null;
+    sim.segments.forEach((s, k) => {
+      if (s.kind !== "arc" || !pose) return;
+      if (k < pose.segment || (k === pose.segment && pose.fraction >= 1)) done.push({ key: k, points: s.points, closed: s.closed });
+      else if (k === pose.segment) partial = weldedPart(s, pose.fraction);
+    });
+    this.seamLayer.setSimFrame(pose, done, partial);
+    sim.onProgress(sim.t, totalDuration(sim.segments), pose?.segment ?? 0);
+    this.renderer.render(this.scene, this.camera);
+  }
+
   setSeams(items: SeamDrawItem[]) {
     this.seamLayer.setSeams(items);
     this.render();
@@ -589,6 +699,16 @@ export class SceneController {
 
   setSeamHighlight(selectedId: string | null, hoverId: string | null) {
     this.seamLayer.setHighlight(selectedId, hoverId);
+    this.render();
+  }
+
+  setSequence(items: { points: Float32Array; closed: boolean }[] | null) {
+    this.seamLayer.setSequence(items);
+    this.render();
+  }
+
+  setSplitPreview(pieces: { points: Float32Array; closed: boolean }[], cuts: [number, number, number][]) {
+    this.seamLayer.setSplitPreview(pieces, cuts.map((c) => new THREE.Vector3(...c)));
     this.render();
   }
 

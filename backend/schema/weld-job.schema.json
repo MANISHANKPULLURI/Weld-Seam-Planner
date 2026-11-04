@@ -430,28 +430,14 @@
             "type": "object",
             "properties": {
               "voltage_v": {
-                "anyOf": [
-                  {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "Voltage volts for MIG/MAG or null for TIG"
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Arc voltage, volts"
               },
               "current_a": {
-                "anyOf": [
-                  {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "Current amps for TIG or null for MIG/MAG"
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Welding current, amps (needed for arc energy)"
               },
               "wire_feed_speed_m_min": {
                 "anyOf": [
@@ -554,14 +540,70 @@
                   }
                 ],
                 "description": "Travel speed limits or null"
+              },
+              "max_throat_per_pass_mm": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Largest throat one pass can lay; bigger welds need more passes. Null = no check"
               }
             },
             "required": [
               "heat_input_kj_mm",
-              "travel_speed_mm_min"
+              "travel_speed_mm_min",
+              "max_throat_per_pass_mm"
             ],
             "additionalProperties": false,
             "description": "User-defined limits"
+          },
+          "seam_defaults": {
+            "type": "object",
+            "properties": {
+              "weld_size": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": [
+                      "a",
+                      "z"
+                    ]
+                  },
+                  "value_mm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "basis",
+                  "value_mm"
+                ],
+                "additionalProperties": false,
+                "description": "Weld size given to seams this procedure is first applied to"
+              },
+              "travel_angle_deg": {
+                "type": "number",
+                "description": "Default travel angle, positive = push"
+              },
+              "stick_out_mm": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Default contact tip to work distance"
+              }
+            },
+            "required": [
+              "weld_size",
+              "travel_angle_deg",
+              "stick_out_mm"
+            ],
+            "additionalProperties": false,
+            "description": "Defaults for seams when this procedure is first applied"
           }
         },
         "required": [
@@ -573,7 +615,8 @@
           "electrical",
           "motion",
           "thermal_efficiency_k",
-          "limits"
+          "limits",
+          "seam_defaults"
         ],
         "additionalProperties": false,
         "description": "Welding procedure"
@@ -782,9 +825,10 @@
                   "1F",
                   "2G",
                   "2F",
+                  "3G",
+                  "3F",
                   "4G",
                   "4F",
-                  "3G",
                   "inclined"
                 ],
                 "description": "AWS equivalent"
@@ -897,6 +941,37 @@
             ],
             "additionalProperties": false,
             "description": "End settings"
+          },
+          "weld_size": {
+            "type": "object",
+            "properties": {
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "a",
+                  "z"
+                ],
+                "description": "a = throat thickness (ISO 2553), z = leg length"
+              },
+              "value_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Size in millimetres on the given basis"
+              },
+              "passes": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Number of passes"
+              }
+            },
+            "required": [
+              "basis",
+              "value_mm",
+              "passes"
+            ],
+            "additionalProperties": false,
+            "description": "Weld size"
           },
           "intermittent": {
             "anyOf": [
@@ -1227,6 +1302,7 @@
           "torch",
           "start",
           "end",
+          "weld_size",
           "intermittent",
           "supervision",
           "inspection",

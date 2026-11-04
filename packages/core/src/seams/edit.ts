@@ -100,3 +100,39 @@ export function joinPaths(a: SeamPath, b: SeamPath, tolerance: number): SeamPath
   const joined = measure({ points: join(first.points, second.points), normalsA: join(first.normalsA, second.normalsA), normalsB: join(first.normalsB, second.normalsB), closed: false, length: 0 });
   return near(end(joined, false), end(joined, true)) ? measure({ ...joined, points: joined.points.slice(0, -3), normalsA: joined.normalsA.slice(0, -3), normalsB: joined.normalsB.slice(0, -3), closed: true }) : joined;
 }
+
+// Where a distance (from the start, in path units) falls: segment index and fraction within it.
+export function locateAlong(path: SeamPath, distance: number): { segment: number; t: number; point: [number, number, number] } {
+  const p = path.points, n = p.length / 3;
+  const segments = path.closed ? n : n - 1;
+  let left = Math.max(0, distance);
+  for (let i = 0; i < segments; i++) {
+    const j = (i + 1) % n;
+    const len = Math.hypot(p[j * 3]! - p[i * 3]!, p[j * 3 + 1]! - p[i * 3 + 1]!, p[j * 3 + 2]! - p[i * 3 + 2]!);
+    if (left <= len || i === segments - 1) {
+      const t = len > 0 ? Math.min(1, left / len) : 0;
+      return { segment: i, t, point: [0, 1, 2].map((k) => p[i * 3 + k]! + (p[j * 3 + k]! - p[i * 3 + k]!) * t) as [number, number, number] };
+    }
+    left -= len;
+  }
+  return { segment: 0, t: 0, point: [p[0]!, p[1]!, p[2]!] };
+}
+
+// Cuts at several distances from the start (path units). Open paths give distances.length + 1 pieces.
+export function splitAtDistances(path: SeamPath, distances: number[]): SeamPath[] {
+  const cuts = [...new Set(distances.filter((d) => d > 1e-9 && d < path.length - 1e-9))].sort((a, b) => a - b);
+  if (cuts.length === 0) return [path];
+  let rest = path;
+  let consumed = 0;
+  const out: SeamPath[] = [];
+  for (const d of cuts) {
+    const { segment, t } = locateAlong(rest, d - consumed);
+    const parts = splitPath(rest, segment, t);
+    if (parts.length === 1) { rest = parts[0]!; consumed = d; continue; } // a loop opened at the first cut
+    out.push(parts[0]!);
+    rest = parts[1]!;
+    consumed = d;
+  }
+  out.push(rest);
+  return out;
+}

@@ -15,3 +15,7 @@ export { chainSegments } from "./seams/chain.ts";
 export type { Segment } from "./seams/chain.ts";
 export * from "./seams/detect.ts";
 export * from "./seams/edit.ts";
+export * from "./weld/calc.ts";
+export * from "./weld/evaluate.ts";
+export * from "./weld/sequence.ts";
+export * from "./weld/job.ts";
