@@ -133,20 +133,10 @@ export function OrientationGizmo({ controller, onView }: Props) {
         height={72}
         className="orientation-gizmo-canvas"
         onClick={handleClick}
-        aria-label="Orientation gizmo. Click an axis to switch view"
-        title="Click to switch standard view (center = isometric)"
+        aria-label="Orientation gizmo. Click an axis to look along it, or the centre for the isometric view"
+        title="Click an axis to look along it. Click the centre for isometric."
         style={{ display: "block", cursor: "pointer" }}
       />
-      <div className="orientation-gizmo-legend" aria-hidden="true">
-        <span style={{ color: "#ff4d4d" }}>X</span> <span style={{ color: "#2d8a2d" }}>Y</span> <span style={{ color: "#2a5bd7" }}>Z</span>
-      </div>
-      <div className="orientation-gizmo-actions">
-        {AXES.map((a) => (
-          <button key={a.id} type="button" className="gizmo-btn" onClick={() => onView(a.id)} aria-label={`View ${a.label}`} title={a.label}>
-            {a.label.slice(1)}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

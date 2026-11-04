@@ -1,10 +1,10 @@
-import { UploadIcon } from "../icons";
+import { LockIcon } from "../icons";
 
 export function LocalOnlyChip() {
   return (
-    <span className="local-chip" title="Your STL is sent to the planner server to be checked and repaired, then deleted.">
-      <UploadIcon size={12} />
-      Checked on server
+    <span className="local-chip" title="Your STL is checked and repaired in this browser. It is never uploaded.">
+      <LockIcon size={12} />
+      Stays in your browser
     </span>
   );
 }

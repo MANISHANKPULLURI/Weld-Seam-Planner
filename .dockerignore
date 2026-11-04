@@ -9,6 +9,7 @@ docs
 **/._*
 backend/tests
 frontend/tests
+packages/core/tests
 frontend/src/assets/02 Logo System
 frontend/src/assets/Armatrix_master_file.jpg
 Dockerfile

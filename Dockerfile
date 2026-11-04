@@ -2,10 +2,12 @@ FROM oven/bun:1.3.14 AS build
 WORKDIR /app
 
 COPY package.json bun.lock ./
+COPY packages/core/package.json packages/core/
 COPY backend/package.json backend/
 COPY frontend/package.json frontend/
 RUN bun install --frozen-lockfile
 
+COPY packages packages
 COPY backend backend
 COPY frontend frontend
 RUN cd frontend && bun run build
@@ -19,10 +21,12 @@ ENV NODE_ENV=production \
     UPLOAD_DIR=/tmp/weld-uploads
 
 COPY package.json bun.lock ./
+COPY packages/core/package.json packages/core/
 COPY backend/package.json backend/
 COPY frontend/package.json frontend/
 RUN bun install --frozen-lockfile --production
 
+COPY packages packages
 COPY backend backend
 COPY --from=build /app/frontend/dist frontend/dist
 

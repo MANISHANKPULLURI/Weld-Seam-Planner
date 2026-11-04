@@ -56,39 +56,48 @@ function installMocks() {
 describe("lifecycle & coordinate preservation (unit, no WebGL)", () => {
   beforeEach(() => installMocks());
 
-  test("display scale computation does not mutate original Float32Array", async () => {
-    const { computeDisplayScale, originalToDisplay, displayToOriginal } = await import("../src/viewer/viewMath.ts");
-    const original = new Float32Array([0,0,0, 100,0,0, 0,100,0]);
+  test("part transform scales to mm without touching the source array", async () => {
+    const { UP_AXIS_QUATERNION_XYZW } = await import("@weld/core");
+    const original = new Float32Array([0, 0, 0, 1, 0, 0, 0, 2, 3]);
     const copy = original.slice();
-    const rawMax = 100;
-    const scale = computeDisplayScale(rawMax);
-    expect(scale).toBe(1); // 100 is normal size => no scale
-    const p = new THREE.Vector3(original[3]!, original[4]!, original[5]!);
-    const disp = originalToDisplay(p, scale);
-    expect(disp.x).toBeCloseTo(100);
-    // ensure original array unchanged
-    expect(original[3]).toBe(copy[3]);
-    expect(original[4]).toBe(copy[4]);
-    // round-trip
-    const back = displayToOriginal(disp, scale);
-    expect(back.x).toBeCloseTo(p.x);
+    const group = new THREE.Group();
+    const [x, y, z, w] = UP_AXIS_QUATERNION_XYZW["+z"];
+    group.scale.setScalar(25.4);
+    group.quaternion.set(x, y, z, w);
+    group.updateMatrixWorld(true);
+    const p = new THREE.Vector3(1, 0, 0).applyMatrix4(group.matrixWorld);
+    expect(p.x).toBeCloseTo(25.4);
+    expect(Array.from(original)).toEqual(Array.from(copy));
   });
 
-  test("huge model scaling preserves original coordinates", async () => {
-    const { computeDisplayScale, originalToDisplay, displayToOriginal } = await import("../src/viewer/viewMath.ts");
-    const huge = 2000;
-    const scale = computeDisplayScale(huge);
-    expect(scale).toBeCloseTo(120/2000);
-    const p = new THREE.Vector3(2000, 0, 0);
-    const disp = originalToDisplay(p, scale);
-    expect(disp.x).toBeCloseTo(120);
-    const orig = displayToOriginal(disp, scale);
-    expect(orig.x).toBeCloseTo(2000);
+  test("+Y up turns the part so its Y axis points up", async () => {
+    const { UP_AXIS_QUATERNION_XYZW } = await import("@weld/core");
+    const group = new THREE.Group();
+    const [x, y, z, w] = UP_AXIS_QUATERNION_XYZW["+y"];
+    group.quaternion.set(x, y, z, w);
+    group.updateMatrixWorld(true);
+    const up = new THREE.Vector3(0, 1, 0).applyMatrix4(group.matrixWorld);
+    expect(up.z).toBeCloseTo(1);
+    expect(up.y).toBeCloseTo(0);
   });
 
-  test("tiny model <0.1 not scaled", async () => {
-    const { computeDisplayScale } = await import("../src/viewer/viewMath.ts");
-    expect(computeDisplayScale(0.05)).toBe(1);
+  test("viewer bounds match the core size helper", async () => {
+    const { UP_AXIS_QUATERNION_XYZW, partSizeMm } = await import("@weld/core");
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 10, 0, 0, 0, 20, 0, 0, 0, 30]), 3));
+    geo.setIndex([0, 1, 2, 0, 2, 3]);
+    const mesh = new THREE.Mesh(geo);
+    const group = new THREE.Group();
+    group.add(mesh);
+    const [x, y, z, w] = UP_AXIS_QUATERNION_XYZW["+y"];
+    group.scale.setScalar(10);
+    group.quaternion.set(x, y, z, w);
+    group.updateMatrixWorld(true);
+    const size = new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3());
+    const expected = partSizeMm({ x: 10, y: 20, z: 30 }, "cm", "+y");
+    expect(size.x).toBeCloseTo(expected.x);
+    expect(size.y).toBeCloseTo(expected.y);
+    expect(size.z).toBeCloseTo(expected.z);
   });
 
   test("bounds center calculation", () => {

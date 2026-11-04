@@ -22,6 +22,33 @@ export function reversed(tri: Tri): Tri {
 }
 
 
+export function box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Tri[] {
+  return OUTWARD_CUBE.map((tri) => tri.map(([x, y, z]) => [
+    x === 0 ? x0 : x1,
+    y === 0 ? y0 : y1,
+    z === 0 ? z0 : z1,
+  ]) as Tri);
+}
+
+
+export function asciiStl(tris: Tri[], name = "part"): string {
+  const lines = [`solid ${name}`];
+  for (const t of tris) {
+    lines.push("  facet normal 0 0 0", "    outer loop");
+    for (const p of t) lines.push(`      vertex ${p[0]} ${p[1]} ${p[2]}`);
+    lines.push("    endloop", "  endfacet");
+  }
+  lines.push(`endsolid ${name}`);
+  return lines.join("\n");
+}
+
+
+export function indexed(tris: Tri[]) {
+  const { vertices, indices } = indexedMesh(tris);
+  return { vertices, indices: new Uint32Array(indices) };
+}
+
+
 export function binaryStl(tris: Tri[]): ArrayBuffer {
 
   const buffer = new ArrayBuffer(84 + tris.length * 50);

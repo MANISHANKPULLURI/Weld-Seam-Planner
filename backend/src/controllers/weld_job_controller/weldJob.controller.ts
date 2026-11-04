@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { weldJobSchema } from "./weldJob.ts";
+import { weldJobSchema } from "@weld/core";
 
 
 export const weldJobRoutes = new Hono();

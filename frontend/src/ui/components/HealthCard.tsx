@@ -1,9 +1,9 @@
 import { useStore } from "../../state/store";
-import { CheckIcon, AlertIcon } from "../icons";
-import { formatCount, formatSize, healthChecks } from "../../domain/mesh/describe";
+import { CheckIcon, AlertIcon, InfoIcon } from "../icons";
+import { cleanupNote, formatCount, formatSize, healthChecks } from "../../domain/mesh/describe";
 import { REPAIR_AVAILABLE } from "../../domain/mesh/repair";
 import { createSampleStl } from "../../domain/mesh/sample";
-import { analyseFile, repairFile } from "../../lib/meshClient";
+import { analyseFile, repairCurrentMesh } from "../../lib/meshClient";
 import type { Health } from "../../domain/mesh/health";
 
 function downloadRepaired() {
@@ -34,11 +34,26 @@ function downloadRepaired() {
 }
 
 function Summary({ health }: { health: Health }) {
+  const part = useStore((s) => s.part);
   return (
     <dl className="health-summary">
       <div><dt>Triangles</dt><dd className="numeric">{formatCount(health.triangles)}</dd></div>
-      <div><dt>Size <span className="health-unit">model units</span></dt><dd className="numeric">{formatSize(health.bounds.size)}</dd></div>
+      <div><dt>Size <span className="health-unit">file units</span></dt><dd className="numeric">{formatSize(health.bounds.size)}</dd></div>
+      {part?.format && <div><dt>Format</dt><dd>{part.format === "ascii" ? "ASCII STL" : "Binary STL"}{part.solids > 1 ? `, ${part.solids} solids` : ""}</dd></div>}
     </dl>
+  );
+}
+
+function Notes({ health }: { health: Health }) {
+  const warnings = useStore((s) => s.part?.warnings ?? []);
+  const error = useStore((s) => s.error);
+  const notes = [...warnings, cleanupNote(health)].filter((n): n is string => Boolean(n));
+  if (notes.length === 0 && !error) return null;
+  return (
+    <ul className="result-notes-list">
+      {error && <li className="result-danger-text">{error}</li>}
+      {notes.map((n) => <li key={n}>{n}</li>)}
+    </ul>
   );
 }
 
@@ -46,11 +61,11 @@ function Checks({ health }: { health: Health }) {
   return (
     <ul className="health-checks" aria-label="Mesh checks">
       {healthChecks(health).map((c) => (
-        <li key={c.id} className={`health-check${c.ok ? " health-check-ok" : " health-check-warn"}`}>
-          <span className="health-check-icon" aria-hidden="true">{c.ok ? <CheckIcon size={12} /> : <AlertIcon size={12} />}</span>
+        <li key={c.id} className={`health-check health-check-${c.level}`}>
+          <span className="health-check-icon" aria-hidden="true">{c.level === "ok" ? <CheckIcon size={12} /> : c.level === "info" ? <InfoIcon size={12} /> : <AlertIcon size={12} />}</span>
           <span className="health-check-label">{c.label}</span>
           <span className="health-check-value numeric">{formatCount(c.value)}</span>
-          {!c.ok && <span className="health-check-hint">{c.hint}</span>}
+          {c.level !== "ok" && <span className="health-check-hint">{c.hint}</span>}
         </li>
       ))}
     </ul>
@@ -59,7 +74,7 @@ function Checks({ health }: { health: Health }) {
 
 export function HealthCard() {
   const health = useStore((s) => s.health);
-  const originalHealth = useStore((s) => s.originalHealth);
+  const originalHealth = useStore((s) => s.originalMesh?.health ?? null);
   const verdict = useStore((s) => s.verdict);
   const repaired = useStore((s) => s.repaired);
   const phase = useStore((s) => s.phase);
@@ -76,9 +91,9 @@ export function HealthCard() {
           <span className="status-badge status-badge-danger">Failed</span>
         </header>
         <p className="result-danger-text">{error}</p>
-        <div className="result-actions">
+        <div className="result-actions result-actions-split">
+          <button type="button" className="btn-secondary" onClick={() => analyseFile(createSampleStl(), "sample-cube.stl")}>Load sample part</button>
           <button type="button" className="btn-primary" onClick={loadAnother}>Try another file</button>
-          <button type="button" className="btn-secondary" onClick={() => analyseFile(createSampleStl(), "sample.stl")}>Load sample part</button>
         </div>
       </section>
     );
@@ -112,6 +127,7 @@ export function HealthCard() {
             ))}
           </tbody>
         </table>
+        <Notes health={health} />
         <p className="result-explainer">You are working on a repaired copy. The original file is unchanged.</p>
         <div className="result-actions result-actions-split">
           <button type="button" className="btn-secondary" onClick={downloadRepaired}>Download STL</button>
@@ -132,13 +148,14 @@ export function HealthCard() {
       </header>
       <Summary health={health} />
       <Checks health={health} />
+      <Notes health={health} />
       {!pass && (
         <p className="result-explainer">
           Repair turns flipped faces outward and fills holes. Skip it if the openings are intentional, such as nozzles or manholes.
         </p>
       )}
       <div className="result-actions result-actions-split">
-        {!pass && REPAIR_AVAILABLE && <button type="button" className="btn-secondary" onClick={() => void repairFile()}>Repair</button>}
+        {!pass && REPAIR_AVAILABLE && <button type="button" className="btn-secondary" onClick={repairCurrentMesh}>Repair</button>}
         <button type="button" className="btn-primary" onClick={() => setStep("seams")}>{pass ? "Continue to seams" : "Continue as is"}</button>
       </div>
       <button type="button" className="btn-link" onClick={loadAnother}>Load another file</button>

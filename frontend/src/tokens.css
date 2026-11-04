@@ -104,16 +104,24 @@ html[data-theme="light"] {
   --bg-topbar: var(--light-sand);
   --border: var(--light-sand-s2);
   --border-strong: var(--light-sand-s3);
-  --active-step: var(--rev-green-t1);
-  --grid-main: var(--rev-green-t3);
-  --grid-sub: var(--rev-green);
+  --active-step: var(--light-sand-s1);
+  --grid-main: var(--light-sand-s3);
+  --grid-sub: var(--light-sand-s2);
   --candidate: var(--rev-green-t4);
   --text: var(--dark-forest-t2);
   --text-secondary: var(--dark-forest-t3);
   --text-muted: var(--rev-green-t2);
-  --text-on-accent: var(--light-sand);
-  --part-solid: var(--dark-forest-t3);
+  --text-on-accent: var(--dark-forest);
+  --part-solid: var(--light-sand-s4);
   --part-wire: var(--dark-forest);
+  /* Bright Discovery darkened for text on light surfaces (Light Sand gives too little contrast). */
+  --warning: #9C5300;
+}
+
+html[data-theme="light"] .planner-step-active .planner-step-index {
+  background: var(--rev-green-t2);
+  border-color: var(--rev-green-t2);
+  color: var(--light-sand);
 }
 
 /* Contrast verification WCAG AA

@@ -54,24 +54,6 @@ export function computeFitDistance(
   return dist;
 }
 
-export function computeDisplayScale(rawMax: number): number {
-  const target = 120;
-  if (rawMax < 0.1 || rawMax > 500 || rawMax < 20) {
-    if (rawMax < 0.1) return 1;
-    return Math.max(0.001, Math.min(1000, target / rawMax));
-  }
-  return 1;
-}
-
-export function displayToOriginal(pt: THREE.Vector3, scale: number): THREE.Vector3 {
-  if (!scale || scale === 1) return pt.clone();
-  return pt.clone().multiplyScalar(1 / scale);
-}
-export function originalToDisplay(pt: THREE.Vector3, scale: number): THREE.Vector3 {
-  if (!scale || scale === 1) return pt.clone();
-  return pt.clone().multiplyScalar(scale);
-}
-
 export function isZUpCorrect(scene: THREE.Scene, camera: THREE.Camera): boolean {
   return scene.up.equals(new THREE.Vector3(0, 0, 1)) && (camera as unknown as { up: THREE.Vector3 }).up.equals(new THREE.Vector3(0, 0, 1));
 }

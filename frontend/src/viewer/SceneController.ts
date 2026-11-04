@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { chooseEngineeringInterval, viewDirectionForId as viewDir, computeFitDistance as calcFitDistance, computeDisplayScale, displayToOriginal, originalToDisplay } from "./viewMath.ts";
+import { UP_AXIS_QUATERNION_XYZW } from "@weld/core";
+import type { UpAxis } from "@weld/core";
+import { chooseEngineeringInterval, viewDirectionForId as viewDir, computeFitDistance as calcFitDistance } from "./viewMath.ts";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -28,9 +30,9 @@ export class SceneController {
   private viewMode: ViewMode = "solid";
   private size = { w: 1, h: 1 };
   private bounds: { min: THREE.Vector3; max: THREE.Vector3; size: THREE.Vector3; center: THREE.Vector3; sphereRadius: number } | null = null;
-  private displayScale = 1;
-  private originalPositions: Float32Array | null = null;
-  private originalIndices: Uint32Array | null = null;
+  private partGroup = new THREE.Group();
+  private gridInterval = 10;
+  private cameraAnimation = 0;
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private onDblClickHandler: ((e: MouseEvent) => void) | null = null;
@@ -71,6 +73,7 @@ export class SceneController {
     this.axes = new THREE.Group();
     this.scene.add(this.grid);
     this.scene.add(this.axes);
+    this.scene.add(this.partGroup);
     this.buildGridForBounds(null);
     this.buildAxesForBounds(null);
 
@@ -133,6 +136,7 @@ export class SceneController {
     this.grid.clear();
     const maxDim = bounds ? Math.max(bounds.size.x, bounds.size.y, bounds.size.z) : 400;
     const interval = chooseEngineeringInterval(maxDim);
+    this.gridInterval = interval;
     const rawExtent = maxDim > 0 ? maxDim * 1.6 : 400;
     const extent = Math.max(interval * 4, Math.ceil(rawExtent / interval) * interval);
     const divisions = Math.max(4, Math.min(40, Math.round(extent / interval)));
@@ -152,14 +156,14 @@ export class SceneController {
 
   private buildAxesForBounds(bounds: typeof this.bounds) {
     this.axes.clear();
-    const maxDim = bounds ? Math.max(bounds.size.x, bounds.size.y, bounds.size.z) : 60;
-    const axisLen = Math.max(12, Math.min(120, maxDim * 0.4));
+    const maxDim = bounds ? Math.max(bounds.size.x, bounds.size.y, bounds.size.z) : 200;
+    const axisLen = Math.max(maxDim * 0.3, 1e-3);
     const helper = new THREE.AxesHelper(axisLen);
     this.axes.add(helper);
     const labels: [string, THREE.Vector3, string][] = [
-      ["X", new THREE.Vector3(axisLen + 4, 0, 0), "#ff4d4d"],
-      ["Y", new THREE.Vector3(0, axisLen + 4, 0), "#4dff4d"],
-      ["Z", new THREE.Vector3(0, 0, axisLen + 4), "#4d7dff"],
+      ["X", new THREE.Vector3(axisLen * 1.12, 0, 0), "#ff4d4d"],
+      ["Y", new THREE.Vector3(0, axisLen * 1.12, 0), "#4dff4d"],
+      ["Z", new THREE.Vector3(0, 0, axisLen * 1.12), "#4d7dff"],
     ];
     for (const [text, pos, color] of labels) {
       const canvas = document.createElement("canvas");
@@ -175,16 +179,16 @@ export class SceneController {
       ctx.fillText(text, 32, 16);
       const tex = new THREE.CanvasTexture(canvas);
       tex.colorSpace = THREE.SRGBColorSpace;
-      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true, depthWrite: false });
       const spr = new THREE.Sprite(mat);
       spr.position.copy(pos);
-      spr.scale.set(10, 5, 1);
+      spr.scale.set(axisLen * 0.16, axisLen * 0.08, 1);
       spr.renderOrder = 999;
       this.axes.add(spr);
-      const tipGeo = new THREE.SphereGeometry(1.2, 8, 8);
+      const tipGeo = new THREE.SphereGeometry(axisLen * 0.018, 8, 8);
       const tipMat = new THREE.MeshBasicMaterial({ color });
       const tip = new THREE.Mesh(tipGeo, tipMat);
-      tip.position.copy(pos).sub(new THREE.Vector3().copy(pos).normalize().multiplyScalar(2));
+      tip.position.copy(pos).multiplyScalar(1 / 1.12);
       this.axes.add(tip);
     }
     if (bounds) {
@@ -221,7 +225,7 @@ export class SceneController {
       const interval = chooseEngineeringInterval(maxDim);
       const rawExtent = maxDim * 1.6;
       const extent = Math.max(interval * 4, Math.ceil(rawExtent / interval) * interval);
-      const halfH = Math.max(extent * 0.55, 10);
+      const halfH = Math.max(extent * 0.55, 1e-3);
       const halfW = halfH * aspect;
       this.cameraOrtho.left = -halfW;
       this.cameraOrtho.right = halfW;
@@ -251,7 +255,7 @@ export class SceneController {
         const edges = new THREE.EdgesGeometry(geo, 1);
         const lineMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#E97F01", transparent: true, opacity: 0.95, linewidth: 1 });
         this.triangleEdges = new THREE.LineSegments(edges, lineMat);
-        this.scene.add(this.triangleEdges);
+        this.partGroup.add(this.triangleEdges);
       }
       this.triangleEdges.visible = true;
       mat.wireframe = false;
@@ -359,6 +363,7 @@ export class SceneController {
   }
 
   private animateCamera(startPos: THREE.Vector3, endPos: THREE.Vector3, startTarget: THREE.Vector3, endTarget: THREE.Vector3, durationMs: number, endUp?: THREE.Vector3) {
+    const animation = ++this.cameraAnimation;
     if (durationMs === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       this.camera.position.copy(endPos);
       this.controls.target.copy(endTarget);
@@ -376,6 +381,7 @@ export class SceneController {
     const t0 = performance.now();
     const ease = (t: number) => 1 - Math.pow(1 - t, 3);
     const step = (now: number) => {
+      if (animation !== this.cameraAnimation) return;
       const t = Math.min(1, (now - t0) / durationMs);
       const e = ease(t);
       this.camera.position.lerpVectors(startPos, endPos, e);
@@ -401,13 +407,6 @@ export class SceneController {
   private handleDoubleClick(e: MouseEvent) {
     const targetEl = e.target as HTMLElement;
     if (targetEl.closest(".view-controls") || targetEl.closest(".orientation-gizmo") || targetEl.closest("button")) return;
-    try {
-      const tool = (window as unknown as { __storeTool?: string }).__storeTool;
-      const storeTool = document.documentElement.getAttribute("data-tool");
-      const isDraw = (document.querySelector(".viewport-host-draw") !== null);
-      if (isDraw) return;
-    } catch {}
-    const isDrawMode = this.host.classList.contains("viewport-host-draw") || this.host.closest(".viewport-host-draw") !== null || document.body.dataset.tool === "draw";
     if (this.host.dataset.tool === "draw") return;
 
     if (!this.mesh) return;
@@ -427,119 +426,95 @@ export class SceneController {
   }
 
 
-  getDisplayScale(): number { return this.displayScale; }
+  getGridInterval(): number { return this.gridInterval; }
 
-  getOriginalFromDisplay(pt: THREE.Vector3): THREE.Vector3 {
-    return displayToOriginal(pt, this.displayScale);
-  }
-
-  getDisplayFromOriginal(pt: THREE.Vector3): THREE.Vector3 {
-    return originalToDisplay(pt, this.displayScale);
-  }
-
-  raycastOriginal(event: MouseEvent): THREE.Vector3 | null {
+  raycastWorld(event: MouseEvent): THREE.Vector3 | null {
     if (!this.mesh) return null;
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.mouse, this.camera);
     const hits = this.raycaster.intersectObject(this.mesh, false);
-    if (hits.length === 0) return null;
-    return this.getOriginalFromDisplay(hits[0]!.point.clone());
+    return hits.length ? hits[0]!.point.clone() : null;
   }
 
 
+  // Geometry stays in file coordinates. The part group applies the unit scale and the up-axis
+  // rotation, so the scene, grid and camera are always in millimetres, Z up.
   setMesh(positions: Float32Array, indices: Uint32Array) {
-    this.originalPositions = positions.slice();
-    this.originalIndices = indices.slice();
-
-    if (this.mesh) {
-      this.scene.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      (this.mesh.material as THREE.Material).dispose();
-      this.mesh = null;
-    }
-    if (this.triangleEdges) {
-      this.scene.remove(this.triangleEdges);
-      this.triangleEdges.geometry.dispose();
-      (this.triangleEdges.material as THREE.Material).dispose();
-      this.triangleEdges = null;
-    }
-    for (const l of this.lights) this.scene.remove(l);
-    this.lights = [];
+    this.disposePart();
 
     if (positions.length === 0 || indices.length === 0) {
-      this.bounds = null;
-      this.displayScale = 1;
-      this.buildGridForBounds(null);
-      this.buildAxesForBounds(null);
+      this.updateBounds();
       this.render();
       return;
     }
 
-    const tmp = new THREE.BufferGeometry();
-    tmp.setAttribute("position", new THREE.BufferAttribute(positions.slice(), 3));
-    tmp.computeBoundingBox();
-    const rawBox = tmp.boundingBox!;
-    const rawSize = new THREE.Vector3().subVectors(rawBox.max, rawBox.min);
-    const rawMax = Math.max(rawSize.x, rawSize.y, rawSize.z) || 1;
-    this.displayScale = computeDisplayScale(rawMax);
-
-    const scaled = new Float32Array(positions.length);
-    for (let i = 0; i < positions.length; i++) scaled[i] = positions[i]! * this.displayScale;
-
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(scaled, 3));
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setIndex(new THREE.BufferAttribute(indices, 1));
     geo.computeVertexNormals();
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
-    const box = geo.boundingBox!;
-    const sphere = geo.boundingSphere!;
-    const size = new THREE.Vector3().subVectors(box.max, box.min);
-    const center = new THREE.Vector3().addVectors(box.min, box.max).multiplyScalar(0.5);
-    this.bounds = { min: box.min.clone(), max: box.max.clone(), size, center, sphereRadius: sphere.radius };
 
-    const solidColor = cssVar("--part-solid") || (document.documentElement.getAttribute("data-theme")==="light" ? "#141E00" : "#C5C5BD");
-    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor), flatShading: false, wireframe: false, side: THREE.DoubleSide });
+    const solidColor = cssVar("--part-solid") || (document.documentElement.getAttribute("data-theme") === "light" ? "#141E00" : "#C5C5BD");
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor), flatShading: true, roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.userData.isModel = true;
+    this.partGroup.add(this.mesh);
 
-    const lightColor = cssVar("--light-sand") || "#F6F6EE";
-    const hemi = new THREE.HemisphereLight(lightColor, cssVar("--dark-forest-t2") || "#0E1600", 1.1);
-    const dirLight = new THREE.DirectionalLight(lightColor, 0.9);
-    dirLight.position.set(120, -80, 200);
-    const fill = new THREE.DirectionalLight(lightColor, 0.35);
-    fill.position.set(-80, 120, 100);
-    this.scene.add(hemi); this.scene.add(dirLight); this.scene.add(fill);
-    this.lights.push(hemi, dirLight, fill);
-    this.scene.add(this.mesh);
+    if (this.lights.length === 0) {
+      const lightColor = cssVar("--light-sand") || "#F6F6EE";
+      const hemi = new THREE.HemisphereLight(lightColor, cssVar("--dark-forest-t2") || "#0E1600", 1.1);
+      const dirLight = new THREE.DirectionalLight(lightColor, 0.9);
+      dirLight.position.set(1.2, -0.8, 2);
+      const fill = new THREE.DirectionalLight(lightColor, 0.35);
+      fill.position.set(-0.8, 1.2, 1);
+      this.scene.add(hemi, dirLight, fill);
+      this.lights.push(hemi, dirLight, fill);
+    }
 
-    const edges = new THREE.EdgesGeometry(geo, 1);
-    const edgeMat = new THREE.LineBasicMaterial({ color: cssVar("--bright-discovery") || cssVar("--discovery") || "#E97F01", transparent: true, opacity: 0.0 });
-    this.triangleEdges = new THREE.LineSegments(edges, edgeMat);
-    this.triangleEdges.visible = false;
-    this.scene.add(this.triangleEdges);
-
-    this.buildGridForBounds(this.bounds);
-    this.buildAxesForBounds(this.bounds);
+    this.updateBounds();
     this.setViewMode(this.viewMode);
     this.fitModel(false);
-    tmp.dispose();
+  }
+
+  setPartTransform(scaleToMm: number, upAxis: UpAxis, animate = true) {
+    const [x, y, z, w] = UP_AXIS_QUATERNION_XYZW[upAxis];
+    const sameScale = this.partGroup.scale.x === scaleToMm;
+    const sameRotation = this.partGroup.quaternion.x === x && this.partGroup.quaternion.w === w;
+    if (sameScale && sameRotation) return;
+    this.partGroup.scale.setScalar(scaleToMm);
+    this.partGroup.quaternion.set(x, y, z, w);
+    this.updateBounds();
+    if (this.mesh) this.fitModel(animate);
+  }
+
+  private updateBounds() {
+    this.partGroup.updateMatrixWorld(true);
+    if (!this.mesh) {
+      this.bounds = null;
+    } else {
+      const box = new THREE.Box3().setFromObject(this.mesh);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      this.bounds = { min: box.min.clone(), max: box.max.clone(), size, center, sphereRadius: Math.max(size.length() / 2, 1e-6) };
+      this.controls.minDistance = this.bounds.sphereRadius * 0.02;
+      this.controls.maxDistance = this.bounds.sphereRadius * 60;
+    }
+    this.buildGridForBounds(this.bounds);
+    this.buildAxesForBounds(this.bounds);
+    this.render();
+  }
+
+  private disposePart() {
+    if (this.mesh) { this.partGroup.remove(this.mesh); this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose(); this.mesh = null; }
+    if (this.triangleEdges) { this.partGroup.remove(this.triangleEdges); this.triangleEdges.geometry.dispose(); (this.triangleEdges.material as THREE.Material).dispose(); this.triangleEdges = null; }
   }
 
   clearMesh() {
-    if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose(); this.mesh = null; }
-    if (this.triangleEdges) { this.scene.remove(this.triangleEdges); this.triangleEdges.geometry.dispose(); (this.triangleEdges.material as THREE.Material).dispose(); this.triangleEdges = null; }
-    for (const l of this.lights) this.scene.remove(l);
-    this.lights = [];
-    this.bounds = null;
-    this.displayScale = 1;
-    this.originalPositions = null;
-    this.originalIndices = null;
-    this.buildGridForBounds(null);
-    this.buildAxesForBounds(null);
-    this.render();
+    this.disposePart();
+    this.updateBounds();
   }
 
   setDimmed(v: boolean) {

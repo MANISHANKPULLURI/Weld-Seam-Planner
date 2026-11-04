@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { chooseEngineeringInterval, viewDirectionForId, computeFitDistance, computeDisplayScale, displayToOriginal, originalToDisplay } from "../src/viewer/viewMath.ts";
+import { chooseEngineeringInterval, viewDirectionForId, computeFitDistance } from "../src/viewer/viewMath.ts";
 
 describe("chooseEngineeringInterval", () => {
   test("small model ~1 => interval 0.2 or 0.1/0.5", () => {
@@ -83,45 +83,5 @@ describe("computeFitDistance", () => {
   test("orthographic distance independent of FOV detail", () => {
     const b = { size: new THREE.Vector3(100,100,100), sphereRadius: 86 };
     expect(computeFitDistance(b, 45, 1, "orthographic")).toBeCloseTo(computeFitDistance(b, 60, 1.5, "orthographic"));
-  });
-});
-
-describe("computeDisplayScale", () => {
-  test("normal size 100 => scale 1", () => {
-    expect(computeDisplayScale(100)).toBe(1);
-  });
-  test("tiny 0.05 => scale 1 (no scaling for <0.1)", () => {
-    expect(computeDisplayScale(0.05)).toBe(1);
-  });
-  test("huge 1000 => scale ~0.12", () => {
-    expect(computeDisplayScale(1000)).toBeCloseTo(120/1000);
-  });
-  test("small 10 => scale 12", () => {
-    expect(computeDisplayScale(10)).toBeCloseTo(12);
-  });
-});
-
-describe("coordinate conversion", () => {
-  test("display↔original with scale 2", () => {
-    const p = new THREE.Vector3(10,20,30);
-    const disp = originalToDisplay(p, 2);
-    expect(disp).toEqual(new THREE.Vector3(20,40,60));
-    const orig = displayToOriginal(disp, 2);
-    expect(orig.x).toBeCloseTo(p.x);
-    expect(orig.y).toBeCloseTo(p.y);
-    expect(orig.z).toBeCloseTo(p.z);
-  });
-  test("scale 1 preserves", () => {
-    const p = new THREE.Vector3(5, -3, 12);
-    expect(displayToOriginal(p, 1)).toEqual(p);
-    expect(originalToDisplay(p, 1)).toEqual(p);
-  });
-  test("far from origin preserved", () => {
-    const p = new THREE.Vector3(10000, -5000, 200);
-    const s = 0.012;
-    const d = originalToDisplay(p, s);
-    const back = displayToOriginal(d, s);
-    expect(back.x).toBeCloseTo(p.x);
-    expect(back.y).toBeCloseTo(p.y);
   });
 });

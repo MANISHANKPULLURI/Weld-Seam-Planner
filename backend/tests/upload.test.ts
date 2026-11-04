@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { app } from "../src/index.ts";
 import { CHUNK_BYTES, UPLOAD_DIR, sweepExpiredUploads } from "../src/controllers/mesh_detection_repair_controller/mesh.controller.ts";
-import { OUTWARD_CUBE, binaryStl } from "./fixtures.ts";
+import { OUTWARD_CUBE, binaryStl } from "../../packages/core/tests/fixtures.ts";
 
 
 async function init(fileSize: number) {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { app } from "../src/index.ts";
-import { OUTWARD_CUBE, binaryStl } from "./fixtures.ts";
+import { OUTWARD_CUBE, binaryStl } from "../../packages/core/tests/fixtures.ts";
 
 
 const octet = { "content-type": "application/octet-stream" };
@@ -46,7 +46,7 @@ describe("POST /api/v1/mesh/validate", () => {
   });
 
   test("MAX_TRIANGLES constant is defined and reasonable", async () => {
-    const { MAX_TRIANGLES } = await import("../src/controllers/mesh_detection_repair_controller/parse.ts");
+    const { MAX_TRIANGLES } = await import("@weld/core");
     expect(MAX_TRIANGLES).toBe(15_000_000);
   });
 });

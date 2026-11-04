@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Logo } from "./Logo";
 import { LocalOnlyChip } from "./components/LocalOnlyChip";
+import { PartChip } from "./components/PartChip";
 import { useStore } from "../state/store";
 import type { Step } from "../state/store";
 import { PanelLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
@@ -16,7 +17,6 @@ const STEPS: { id: Step; label: string }[] = [
 export function AppShell({ children, viewport }: { children: React.ReactNode; viewport: React.ReactNode }) {
   const phase = useStore((s) => s.phase);
   const step = useStore((s) => s.step);
-  const fileName = useStore((s) => s.fileName);
   const frame = useStore((s) => s.frame);
   const setStep = useStore((s) => s.setStep);
   const checked = phase === "checked";
@@ -44,7 +44,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
             {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
         </div>
-        {fileName && <span className="planner-filechip" title={fileName}>{fileName}</span>}
+        <PartChip />
         <LocalOnlyChip />
       </header>
       <aside id="planner-panel" className="planner-panel" aria-hidden={collapsed}>
@@ -59,7 +59,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
                   className={`planner-step${isActive ? " planner-step-active" : ""}${isLocked ? " planner-step-locked" : ""}`}
                   aria-current={isActive ? "step" : undefined}
                   aria-disabled={isLocked}
-                  title={isLocked ? "Load a part first" : undefined}
+                  title={isLocked ? (checked ? "Confirm units and up axis first" : "Load a part first") : undefined}
                   onClick={() => { if (!isLocked) setStep(s.id); }}
                   disabled={isLocked}
                 >

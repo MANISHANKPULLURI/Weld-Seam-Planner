@@ -1,20 +1,25 @@
 import { useEffect, useRef, useState } from "react";
+import { MM_PER_UNIT, partSizeMm } from "@weld/core";
 import { SceneController } from "./viewer/SceneController";
 import type { ViewId } from "./state/store";
 import { useStore } from "./state/store";
 import { ViewControls } from "./ui/components/ViewControls";
 import { OrientationGizmo } from "./viewer/OrientationGizmo";
+import { formatSize } from "./domain/mesh/describe";
 
 export default function Viewport() {
   const hostRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<SceneController | null>(null);
   const [ctrl, setCtrl] = useState<SceneController | null>(null);
+  const [gridMm, setGridMm] = useState<number | null>(null);
   const phase = useStore((s) => s.phase);
   const mesh = useStore((s) => s.mesh);
   const health = useStore((s) => s.health);
+  const frame = useStore((s) => s.frame);
   const tool = useStore((s) => s.tool);
-  const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
+  const projection = useStore((s) => s.projection);
+  const viewMode = useStore((s) => s.viewMode);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -33,14 +38,25 @@ export default function Viewport() {
   useEffect(() => {
     const c = ctrlRef.current;
     if (!c) return;
-    if (mesh) { c.setMesh(mesh.positions, mesh.indices); c.fadeIn(); }
-    else c.clearMesh();
+    if (mesh) {
+      c.setPartTransform(MM_PER_UNIT[useStore.getState().frame.units], useStore.getState().frame.upAxis, false);
+      c.setMesh(mesh.positions, mesh.indices);
+      c.fadeIn();
+    } else {
+      c.clearMesh();
+    }
+    setGridMm(mesh ? c.getGridInterval() : null);
   }, [mesh]);
 
   useEffect(() => {
     const c = ctrlRef.current;
-    if (!c) return;
-    c.setDimmed(phase === "analysing" || phase === "repairing");
+    if (!c || !mesh) return;
+    c.setPartTransform(MM_PER_UNIT[frame.units], frame.upAxis);
+    setGridMm(c.getGridInterval());
+  }, [frame.units, frame.upAxis, mesh]);
+
+  useEffect(() => {
+    ctrlRef.current?.setDimmed(phase === "analysing" || phase === "repairing");
   }, [phase]);
 
   useEffect(() => {
@@ -49,30 +65,30 @@ export default function Viewport() {
     return () => window.removeEventListener("themechange", onTheme);
   }, []);
 
-  const projection = useStore((s) => s.projection);
-  const viewMode = useStore((s) => s.viewMode);
   useEffect(() => { if (ctrl) ctrl.setProjection(projection); }, [ctrl, projection]);
   useEffect(() => { if (ctrl) ctrl.setViewMode(viewMode); }, [ctrl, viewMode]);
-
-  const size = health?.bounds.size;
 
   function handleGizmoView(id: ViewId) {
     setView(id);
     ctrl?.setView(id);
   }
 
+  const sizeMm = health ? partSizeMm(health.bounds.size, frame.units, frame.upAxis) : null;
+
   return (
     <div className={`viewport-wrapper${tool === "draw" ? " viewport-host-draw" : ""}`}>
       <div ref={hostRef} className="viewport-canvas" />
       <ViewControls controller={ctrl} />
-      {}
       <div className="orientation-gizmo-host">
         <OrientationGizmo controller={ctrl} onView={handleGizmoView} />
       </div>
       {(phase === "analysing" || phase === "repairing") && <div className="scanline" aria-hidden="true" />}
-      {size && (
+      {sizeMm && (
         <div className="view-chip view-controls-bottom-left">
-          <span className="numeric">{size.x.toFixed(1)} × {size.y.toFixed(1)} × {size.z.toFixed(1)} model units · Z up</span>
+          <span className="numeric">{formatSize(sizeMm)} mm</span>
+          {gridMm !== null && <span className="view-chip-sep">Grid {gridMm} mm</span>}
+          <span className="view-chip-sep">Z up</span>
+          {!frame.confirmed && <span className="view-chip-warn">Units not confirmed</span>}
         </div>
       )}
     </div>

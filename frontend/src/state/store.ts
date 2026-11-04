@@ -1,151 +1,207 @@
 import { create } from "zustand";
-import type { Health } from "../domain/mesh/health";
+import { guessUnits, guessUpAxis } from "@weld/core";
+import type { Health, MeshStage, RepairStats, StlFormat, Units, UpAxis } from "@weld/core";
 import { hasIssues } from "../domain/mesh/describe";
-import { guessUnits } from "../domain/mesh/units";
-import type { Units } from "../domain/mesh/units";
 
-export type { Units };
+export type { Units, UpAxis };
 
 export type Phase = "empty" | "analysing" | "checked" | "repairing" | "error";
 export type Verdict = "pass" | "issues";
 export type Step = "part" | "seams" | "procedures" | "sequence" | "review";
-export type StageId = "read" | "weld" | "topology" | "measure";
-export type StageStatus = "pending" | "active" | "done" | "warning" | "error";
+export type StageId = MeshStage;
+export type StageStatus = "pending" | "active" | "done" | "error";
 export type Tool = "select" | "draw";
 export type Projection = "perspective" | "orthographic";
 export type ViewId = "iso" | "top" | "bottom" | "front" | "back" | "left" | "right";
+export type ViewMode = "solid" | "wireframe" | "triangles";
 
-export type UpAxis = "+z" | "+y";
+export type PartInfo = {
+  fileName: string;
+  sizeBytes: number;
+  sha256: string | null;
+  format: StlFormat | null;
+  solids: number;
+  warnings: string[];
+};
 
-type Frame = { units: Units; unitsGuessed: boolean; unitsNote: string | null; upAxis: UpAxis; upGuessed: boolean; confirmed: boolean };
+export type MeshData = {
+  positions: Float32Array;
+  indices: Uint32Array;
+  orientedIndices: Uint32Array;
+  bodyOfTriangle: Uint32Array;
+  health: Health;
+};
 
-type MeshData = { positions: Float32Array; indices: Uint32Array; health: Health } | null;
+export type Frame = { units: Units; unitsGuessed: boolean; unitsNote: string | null; upAxis: UpAxis; upGuessed: boolean; confirmed: boolean };
+
+export type AnalysisResult = Omit<MeshData, "positions"> & { vertices: Float32Array; format: StlFormat; solids: number; warnings: string[]; sha256: string | null; sizeBytes: number };
+
+export type RepairResult = { indices: Uint32Array; bodyOfTriangle: Uint32Array; health: Health; stats: RepairStats; binary: ArrayBuffer };
+
+export const STAGE_ORDER: StageId[] = ["read", "weld", "topology", "orient"];
+const STAGE_WEIGHT: Record<StageId, number> = { read: 0.35, weld: 0.25, topology: 0.2, orient: 0.2 };
+
+const initialStages = (): Record<StageId, StageStatus> => ({ read: "pending", weld: "pending", topology: "pending", orient: "pending" });
+const initialFrame = (): Frame => ({ units: "mm", unitsGuessed: false, unitsNote: null, upAxis: "+z", upGuessed: false, confirmed: false });
 
 type Store = {
   phase: Phase;
   verdict: Verdict | null;
-  repaired: boolean;
-  repairedBinary: ArrayBuffer | null;
   step: Step;
-  fileName: string | null;
   error: string | null;
+  part: PartInfo | null;
   health: Health | null;
-  originalHealth: Health | null;
-  mesh: MeshData;
-  originalMesh: MeshData;
-  originalBuffer: ArrayBuffer | null;
-  originalFile: File | null;
+  mesh: MeshData | null;
+  originalMesh: MeshData | null;
+  repaired: boolean;
+  repairStats: RepairStats | null;
+  repairedBinary: ArrayBuffer | null;
   stages: Record<StageId, StageStatus>;
-  repairStages: Record<string, StageStatus>;
   progress: number;
   tool: Tool;
   projection: Projection;
-  wireframe: boolean;
-  viewMode: "solid" | "wireframe" | "triangles";
+  viewMode: ViewMode;
   view: ViewId;
   frame: Frame;
   generation: number;
-  setPhase: (p: Phase) => void;
-  setVerdict: (v: Verdict | null) => void;
-  setHealth: (h: Health | null, mesh: MeshData) => void;
-  setError: (e: string | null) => void;
-  setFileName: (n: string | null) => void;
-  setStage: (id: StageId, s: StageStatus) => void;
-  resetStages: () => void;
+
+  startAnalysing: (fileName: string, sizeBytes: number) => number;
+  setStageProgress: (generation: number, stage: StageId, fraction: number) => void;
+  finishAnalysis: (generation: number, result: AnalysisResult) => void;
+  failAnalysis: (generation: number, message: string) => void;
+  startRepair: () => number;
+  finishRepair: (generation: number, result: RepairResult) => void;
+  failRepair: (generation: number, message: string) => void;
+  undoRepair: () => void;
+  loadAnother: () => void;
+
   setStep: (s: Step) => void;
   setTool: (t: Tool) => void;
   setProjection: (p: Projection) => void;
-  toggleWireframe: () => void;
-  setWireframe: (v: boolean) => void;
+  setViewMode: (m: ViewMode) => void;
   setView: (v: ViewId) => void;
-  resetView: () => void;
-  setProgress: (v: number) => void;
   setUnits: (u: Units) => void;
   setUpAxis: (a: UpAxis) => void;
   confirmFrame: () => void;
-  setViewMode: (m: "solid" | "wireframe" | "triangles") => void;
-  startAnalysing: (name: string, buffer: ArrayBuffer) => void;
-  startAnalysingFile: (name: string, file: File) => void;
-  finishChecked: (health: Health, mesh: MeshData, repaired: boolean, generation: number, binary?: ArrayBuffer | null) => void;
-  setRepairedBinary: (b: ArrayBuffer | null) => void;
-  undoRepair: () => void;
-  loadAnother: () => void;
 };
 
-const initialStages: Record<StageId, StageStatus> = { read: "pending", weld: "pending", topology: "pending", measure: "pending" };
-
-const initialFrame: Frame = { units: "mm", unitsGuessed: false, unitsNote: null, upAxis: "+z", upGuessed: false, confirmed: false };
-
-const clearedPart = { health: null, mesh: null, originalHealth: null, originalMesh: null, repaired: false, repairedBinary: null, verdict: null, error: null, progress: 0, stages: { ...initialStages } };
-
-export const useStore = create<Store>((set) => ({
-  phase: "empty",
+const clearedPart = () => ({
   verdict: null,
-  repaired: false,
-  repairedBinary: null,
-  step: "part",
-  fileName: null,
   error: null,
+  part: null,
   health: null,
-  originalHealth: null,
   mesh: null,
   originalMesh: null,
-  originalBuffer: null,
-  originalFile: null,
-  stages: { ...initialStages },
-  repairStages: {},
+  repaired: false,
+  repairStats: null,
+  repairedBinary: null,
+  stages: initialStages(),
   progress: 0,
+  frame: initialFrame(),
+  step: "part" as Step,
+});
+
+export const useStore = create<Store>((set, get) => ({
+  phase: "empty",
+  ...clearedPart(),
   tool: "select",
   projection: "perspective",
-  wireframe: false,
-  viewMode: "solid" as const,
+  viewMode: "solid",
   view: "iso",
-  frame: { ...initialFrame },
   generation: 0,
-  setPhase: (phase) => set({ phase }),
-  setVerdict: (verdict) => set({ verdict }),
-  setHealth: (health, mesh) => set({ health, mesh }),
-  setError: (error) => set({ error }),
-  setFileName: (fileName) => set({ fileName }),
-  setStage: (id, status) => set((s) => ({ stages: { ...s.stages, [id]: status } })),
-  resetStages: () => set({ stages: { ...initialStages } }),
+
+  startAnalysing: (fileName, sizeBytes) => {
+    const generation = get().generation + 1;
+    set({
+      ...clearedPart(),
+      phase: "analysing",
+      generation,
+      part: { fileName, sizeBytes, sha256: null, format: null, solids: 0, warnings: [] },
+    });
+    return generation;
+  },
+
+  setStageProgress: (generation, stage, fraction) => set((s) => {
+    if (generation !== s.generation || s.phase !== "analysing") return {};
+    const stages = { ...s.stages };
+    const index = STAGE_ORDER.indexOf(stage);
+    let progress = 0;
+    STAGE_ORDER.forEach((id, i) => {
+      if (i < index) { stages[id] = "done"; progress += STAGE_WEIGHT[id]; }
+      else if (i === index) { stages[id] = fraction >= 1 ? "done" : "active"; progress += STAGE_WEIGHT[id] * Math.min(1, fraction); }
+    });
+    return { stages, progress: Math.round(progress * 100) };
+  }),
+
+  finishAnalysis: (generation, result) => set((s) => {
+    if (generation !== s.generation) return {};
+    const size = result.health.bounds.size;
+    const guess = guessUnits(size, s.part?.fileName ?? null);
+    return {
+      phase: "checked",
+      progress: 100,
+      stages: { read: "done", weld: "done", topology: "done", orient: "done" },
+      health: result.health,
+      verdict: hasIssues(result.health) ? "issues" : "pass",
+      mesh: { positions: result.vertices, indices: result.indices, orientedIndices: result.orientedIndices, bodyOfTriangle: result.bodyOfTriangle, health: result.health },
+      part: { fileName: s.part?.fileName ?? "part.stl", sizeBytes: result.sizeBytes, sha256: result.sha256, format: result.format, solids: result.solids, warnings: result.warnings },
+      frame: { units: guess.units, unitsGuessed: true, unitsNote: guess.note, upAxis: guessUpAxis(size), upGuessed: true, confirmed: false },
+    };
+  }),
+
+  failAnalysis: (generation, message) => set((s) => {
+    if (generation !== s.generation) return {};
+    const stages = { ...s.stages };
+    const active = STAGE_ORDER.find((id) => stages[id] !== "done") ?? "read";
+    stages[active] = "error";
+    return { phase: "error", error: message, stages };
+  }),
+
+  startRepair: () => {
+    const generation = get().generation + 1;
+    set({ phase: "repairing", generation, error: null });
+    return generation;
+  },
+
+  finishRepair: (generation, result) => set((s) => {
+    if (generation !== s.generation || !s.mesh) return {};
+    const original = s.originalMesh ?? s.mesh;
+    return {
+      phase: "checked",
+      repaired: true,
+      repairStats: result.stats,
+      repairedBinary: result.binary,
+      originalMesh: original,
+      health: result.health,
+      verdict: hasIssues(result.health) ? "issues" : "pass",
+      mesh: { positions: s.mesh.positions, indices: result.indices, orientedIndices: result.indices, bodyOfTriangle: result.bodyOfTriangle, health: result.health },
+    };
+  }),
+
+  failRepair: (generation, message) => set((s) => (generation !== s.generation ? {} : { phase: "checked", error: message })),
+
+  undoRepair: () => set((s) => {
+    if (!s.originalMesh) return {};
+    return {
+      mesh: s.originalMesh,
+      health: s.originalMesh.health,
+      verdict: hasIssues(s.originalMesh.health) ? "issues" : "pass",
+      originalMesh: null,
+      repaired: false,
+      repairStats: null,
+      repairedBinary: null,
+      error: null,
+    };
+  }),
+
+  loadAnother: () => set((s) => ({ ...clearedPart(), phase: "empty", generation: s.generation + 1 })),
+
   setStep: (step) => set({ step }),
   setTool: (tool) => set({ tool }),
   setProjection: (projection) => set({ projection }),
-  toggleWireframe: () => set((s) => ({ wireframe: !s.wireframe, viewMode: !s.wireframe ? "wireframe" : "solid" })),
-  setWireframe: (wireframe) => set({ wireframe, viewMode: wireframe ? "wireframe" : "solid" }),
-  setViewMode: (viewMode) => set({ viewMode, wireframe: viewMode === "wireframe" }),
+  setViewMode: (viewMode) => set({ viewMode }),
   setView: (view) => set({ view }),
-  resetView: () => set({ view: "iso" }),
-  setProgress: (progress) => set({ progress }),
-  setUnits: (units) => set((s) => ({ frame: { ...s.frame, units, unitsGuessed: false, unitsNote: null } })),
-  setUpAxis: (upAxis) => set((s) => ({ frame: { ...s.frame, upAxis, upGuessed: false } })),
+  setUnits: (units) => set((s) => ({ frame: { ...s.frame, units, unitsGuessed: false, unitsNote: null, confirmed: false } })),
+  setUpAxis: (upAxis) => set((s) => ({ frame: { ...s.frame, upAxis, upGuessed: false, confirmed: false } })),
   confirmFrame: () => set((s) => ({ frame: { ...s.frame, confirmed: true } })),
-  startAnalysing: (fileName, buffer) => set((s) => ({ ...clearedPart, phase: "analysing", fileName, originalBuffer: buffer, originalFile: null, generation: s.generation + 1, frame: { ...initialFrame }, step: "part" })),
-  startAnalysingFile: (fileName, file) => set((s) => ({ ...clearedPart, phase: "analysing", fileName, originalFile: file, originalBuffer: null, generation: s.generation + 1, frame: { ...initialFrame }, step: "part" })),
-  finishChecked: (health, mesh, repaired, generation, binary) => set((s) => {
-    if (generation !== s.generation) return {};
-    if (!health || typeof health.triangles !== "number" || !health.bounds) {
-      return { phase: "error", error: "Invalid health data from server", stages: { read: "error", weld: "pending", topology: "pending", measure: "pending" } };
-    }
-    const verdict: Verdict = hasIssues(health) ? "issues" : "pass";
-    const stagesDone: Record<StageId, StageStatus> = { read: "done", weld: "done", topology: "done", measure: "done" };
-    let frame = s.frame;
-    if (!frame.confirmed) {
-      const size = health.bounds.size;
-      const guess = guessUnits(size, s.fileName);
-      const upAxis: UpAxis = size.y > size.z * 2 ? "+y" : "+z";
-      frame = { units: guess.units, unitsGuessed: true, unitsNote: guess.note, upAxis, upGuessed: true, confirmed: false };
-    }
-    if (s.phase === "repairing" || repaired) {
-      return { phase: "checked", health, mesh, verdict, repaired: true, stages: stagesDone, originalHealth: s.originalHealth ?? s.health, originalMesh: s.originalMesh ?? s.mesh, progress: 100, frame, repairedBinary: binary ?? s.repairedBinary ?? null };
-    }
-    return { phase: "checked", health, mesh, verdict, stages: stagesDone, progress: 100, frame, repairedBinary: null };
-  }),
-  setRepairedBinary: (repairedBinary) => set({ repairedBinary }),
-  undoRepair: () => set((s) => {
-    if (!s.originalMesh || !s.originalHealth) return {};
-    return { mesh: s.originalMesh, health: s.originalHealth, originalMesh: null, originalHealth: null, repaired: false, repairedBinary: null, verdict: hasIssues(s.originalHealth) ? "issues" : "pass" };
-  }),
-  loadAnother: () => set((s) => ({ ...clearedPart, phase: "empty", fileName: null, originalBuffer: null, originalFile: null, frame: { ...initialFrame }, step: "part", generation: s.generation + 1 })),
 }));

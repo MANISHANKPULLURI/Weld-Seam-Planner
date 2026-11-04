@@ -70,6 +70,19 @@
   font-variant-numeric: tabular-nums;
 }
 
+.view-chip .numeric { color: var(--text); }
+
+.view-chip-sep {
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+
+.view-chip-warn {
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  color: var(--warning);
+}
+
 .view-btn {
   height: 28px;
   padding: 0 8px;
@@ -186,8 +199,10 @@
 
 /* avoid overlap between gizmo and size chip */
 .view-controls-bottom-left.view-chip {
+  position: absolute;
+  z-index: 2;
   bottom: 8px;
-  left: 96px; /* offset from gizmo */
+  left: 104px;
 }
 @media (max-width: 640px) {
   .view-controls-top-right { max-width: 96vw; gap: 4px; }

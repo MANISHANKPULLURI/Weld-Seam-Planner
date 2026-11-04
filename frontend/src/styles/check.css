@@ -50,8 +50,8 @@
 }
 
 .check-icon-active {
-  border-color: var(--accent);
-  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
   animation: spin 0.8s linear infinite;
 }
 
@@ -131,6 +131,7 @@
 .health-check-icon { display: grid; place-items: center; }
 .health-check-ok .health-check-icon { color: var(--rev-green-t4); }
 .health-check-warn .health-check-icon { color: var(--warning); }
+.health-check-info .health-check-icon { color: var(--text-muted); }
 .health-check-label { color: var(--text-secondary); }
 .health-check-warn .health-check-label { color: var(--text); }
 .health-check-value { font-weight: 500; color: var(--text-secondary); }
@@ -142,8 +143,8 @@
   color: var(--text-muted);
 }
 
-.result-actions-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
-.result-actions-split > button { width: 100%; padding: 0 12px; }
+.result-actions.result-actions-split { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.result-actions.result-actions-split > button { width: 100%; padding: 0 12px; }
 
 .btn-link {
   align-self: flex-start;
@@ -174,6 +175,49 @@
   font-size: 13px;
 }
 .field-note { font-size: 12px; line-height: 1.4; color: var(--warning); }
+
+.result-notes-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.progress-percent { font-size: 13px; color: var(--text-secondary); }
+
+.progress-file {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.progress-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+
+.progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 150ms linear;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
 
 .result-confirmed {
   display: inline-flex;
@@ -263,6 +307,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .scanline { display: none; }
-  .check-icon-active { animation: none; }
+  .check-icon-active, .spinner { animation: none; }
   .check-mark { animation: none; stroke-dashoffset: 0; }
 }

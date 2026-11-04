@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { weldJobSchema } from "./weldJob.ts";
+import { weldJobSchema } from "@weld/core";
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 

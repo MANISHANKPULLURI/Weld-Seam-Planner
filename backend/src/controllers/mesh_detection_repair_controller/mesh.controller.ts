@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
-import { MeshError } from "./types.ts";
-import { DEFAULT_WELD_TOLERANCE, runRepairPipeline, runValidationPipeline } from "./pipeline.ts";
+import { MeshError, analyseMesh, repairMesh, writeBinaryStl } from "@weld/core";
+import type { AnalysedMesh } from "@weld/core";
 import { mkdir, writeFile, readFile, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -55,13 +55,24 @@ async function readMeshBody(c: Context): Promise<ArrayBuffer | Response> {
 }
 
 
-function readTolerance(c: Context): number | null {
+// undefined means "use the size-relative default"; null means the query value was invalid.
+function readTolerance(c: Context): number | undefined | null {
 
   const parsed = toleranceSchema.safeParse(c.req.query("tolerance"));
 
-  if (!parsed.success) return null;
+  return parsed.success ? parsed.data : null;
+}
 
-  return parsed.data ?? DEFAULT_WELD_TOLERANCE;
+
+function runValidation(buffer: ArrayBuffer, tolerance: number | undefined) {
+  return analyseMesh(buffer, { tolerance });
+}
+
+
+function runRepair(buffer: ArrayBuffer, tolerance: number | undefined) {
+  const analysed = analyseMesh(buffer, { tolerance });
+  const repaired = repairMesh(analysed.vertices, analysed.indices, analysed.health);
+  return { analysed, repaired, binary: writeBinaryStl(analysed.vertices, repaired.indices) };
 }
 
 
@@ -73,12 +84,14 @@ function meshErrorResponse(c: Context, err: unknown, fallback: string) {
 }
 
 
-function validationBody(result: ReturnType<typeof runValidationPipeline>) {
+function validationBody(result: AnalysedMesh) {
   return {
     health: result.health,
+    format: result.format,
+    warnings: result.warnings,
     mesh: {
-      positions: Array.from(result.welded.uniqueVertices),
-      indices: Array.from(result.welded.indexArray),
+      positions: Array.from(result.vertices),
+      indices: Array.from(result.indices),
       triangles: result.health.triangles,
     },
     repairable: !result.health.isManifoldSolid || result.health.flippedFaces > 0,
@@ -86,15 +99,15 @@ function validationBody(result: ReturnType<typeof runValidationPipeline>) {
 }
 
 
-function repairBody(result: ReturnType<typeof runRepairPipeline>) {
+function repairBody(result: ReturnType<typeof runRepair>) {
   return {
-    health: result.health,
+    health: result.repaired.health,
     mesh: {
-      positions: Array.from(result.welded.uniqueVertices),
-      indices: Array.from(result.welded.indexArray),
-      triangles: result.health.triangles,
+      positions: Array.from(result.analysed.vertices),
+      indices: Array.from(result.repaired.indices),
+      triangles: result.repaired.health.triangles,
     },
-    stats: result.stats,
+    stats: result.repaired.stats,
     repaired: true,
     binaryBase64: Buffer.from(result.binary).toString("base64"),
   };
@@ -110,7 +123,7 @@ meshRoutes.post("/validate", async (c) => {
   if (buffer instanceof Response) return buffer;
 
   try {
-    return c.json(validationBody(runValidationPipeline(buffer, tolerance)));
+    return c.json(validationBody(runValidation(buffer, tolerance)));
   } catch (err) {
     return meshErrorResponse(c, err, "Invalid mesh");
   }
@@ -126,7 +139,7 @@ meshRoutes.post("/repair", async (c) => {
   if (buffer instanceof Response) return buffer;
 
   try {
-    return c.json(repairBody(runRepairPipeline(buffer, tolerance)));
+    return c.json(repairBody(runRepair(buffer, tolerance)));
   } catch (err) {
     return meshErrorResponse(c, err, "Repair failed");
   }
@@ -143,7 +156,7 @@ meshRoutes.post("/repair/binary", async (c) => {
 
   try {
 
-    const result = runRepairPipeline(buffer, tolerance);
+    const result = runRepair(buffer, tolerance);
 
     return new Response(result.binary, {
       headers: {
@@ -248,7 +261,7 @@ meshRoutes.post("/upload/:id/complete", async (c) => {
   const buffer = assembled.buffer.slice(assembled.byteOffset, assembled.byteOffset + assembled.byteLength) as ArrayBuffer;
 
   try {
-    const body = mode === "repair" ? repairBody(runRepairPipeline(buffer, tolerance)) : validationBody(runValidationPipeline(buffer, tolerance));
+    const body = mode === "repair" ? repairBody(runRepair(buffer, tolerance)) : validationBody(runValidation(buffer, tolerance));
     return c.json(body);
   } catch (err) {
     return meshErrorResponse(c, err, "Processing failed");

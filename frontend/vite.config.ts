@@ -3,5 +3,6 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  resolve: { dedupe: ["three"] },
   worker: { format: "es" },
 });

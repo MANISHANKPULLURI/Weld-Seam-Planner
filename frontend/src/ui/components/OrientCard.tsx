@@ -1,9 +1,10 @@
+import { partSizeMm } from "@weld/core";
 import { useStore } from "../../state/store";
 import type { Units, UpAxis } from "../../state/store";
 import { formatSize } from "../../domain/mesh/describe";
 import { CheckIcon } from "../icons";
 
-const MM_PER_UNIT: Record<Units, number> = { mm: 1, cm: 10, m: 1000, inch: 25.4 };
+const UP_LABEL: Record<UpAxis, string> = { "+z": "+Z", "+y": "+Y" };
 
 export function OrientCard() {
   const health = useStore((s) => s.health);
@@ -14,8 +15,7 @@ export function OrientCard() {
 
   if (!health) return null;
 
-  const scale = MM_PER_UNIT[frame.units];
-  const sizeMm = { x: health.bounds.size.x * scale, y: health.bounds.size.y * scale, z: health.bounds.size.z * scale };
+  const sizeMm = partSizeMm(health.bounds.size, frame.units, frame.upAxis);
   const guessed = !frame.confirmed && (frame.unitsGuessed || frame.upGuessed);
 
   return (
@@ -27,35 +27,39 @@ export function OrientCard() {
         </span>
       </header>
 
+      <p className="result-explainer">STL files carry no units. Check that the size below matches the real part. The model updates as you change these.</p>
+
       <div className="field-grid">
         <label className="field">
           <span className="field-label">File units</span>
           <select className="field-control" value={frame.units} onChange={(e) => setUnits(e.target.value as Units)}>
-            <option value="mm">mm</option>
-            <option value="cm">cm</option>
-            <option value="m">m</option>
-            <option value="inch">inch</option>
+            <option value="mm">Millimetres</option>
+            <option value="cm">Centimetres</option>
+            <option value="m">Metres</option>
+            <option value="inch">Inches</option>
           </select>
         </label>
         <label className="field">
-          <span className="field-label">Up axis</span>
+          <span className="field-label">Up axis in the file</span>
           <select className="field-control" value={frame.upAxis} onChange={(e) => setUpAxis(e.target.value as UpAxis)}>
-            <option value="+z">+Z</option>
+            <option value="+z">+Z (most CAD)</option>
             <option value="+y">+Y</option>
           </select>
         </label>
       </div>
 
       <dl className="health-summary">
-        <div><dt>Size <span className="health-unit">mm</span></dt><dd className="numeric">{formatSize(sizeMm)}</dd></div>
+        <div><dt>Real size <span className="health-unit">mm</span></dt><dd className="numeric">{formatSize(sizeMm)}</dd></div>
       </dl>
 
       {frame.unitsNote && !frame.confirmed && <p className="field-note" role="note">{frame.unitsNote}</p>}
 
       {frame.confirmed ? (
-        <p className="result-confirmed"><CheckIcon size={12} /> Units and up axis confirmed.</p>
+        <p className="result-confirmed"><CheckIcon size={12} /> Planning in millimetres, Z up.</p>
       ) : (
-        <button type="button" className="btn-primary btn-block" onClick={confirmFrame}>Confirm units and up axis</button>
+        <button type="button" className="btn-primary btn-block" onClick={confirmFrame}>
+          Confirm {frame.units === "inch" ? "inches" : frame.units}, {UP_LABEL[frame.upAxis]} up
+        </button>
       )}
     </section>
   );

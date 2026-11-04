@@ -1,5 +1,5 @@
 import { Logo } from "./Logo";
-import { UploadIcon } from "./icons";
+import { LockIcon } from "./icons";
 
 export function Home() {
   const toggle = () => {
@@ -26,7 +26,7 @@ export function Home() {
             <div className="home-step">
               <span className="home-step-num">1</span>
               <span className="home-step-title">Check the part</span>
-              <span className="home-step-desc">We look for open edges, flipped faces and loose bodies.</span>
+              <span className="home-step-desc">We look for open edges, flipped faces and separate bodies.</span>
             </div>
             <div className="home-step">
               <span className="home-step-num">2</span>
@@ -40,8 +40,8 @@ export function Home() {
             </div>
           </div>
           <div className="home-privacy">
-            <UploadIcon size={14} />
-            Your STL is sent to the planner server to be checked, then deleted. Nothing is stored.
+            <LockIcon size={14} />
+            Your STL is checked in your browser and never uploaded.
           </div>
           <svg className="home-deco" viewBox="0 0 640 48" fill="none" aria-hidden="true">
             <path d="M0 36H240M240 8V36M240 20H360M360 8V36" stroke="var(--rev-green-t3)" strokeWidth={1.4} />
