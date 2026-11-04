@@ -19,3 +19,7 @@ frontend/public/fonts/
 
 node_modules
 dist
+
+
+.opencode
+.impeccable

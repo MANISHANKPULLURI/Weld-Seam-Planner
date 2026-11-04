@@ -178,11 +178,19 @@ export class SceneController {
     const maxDim = bounds ? Math.max(bounds.size.x, bounds.size.y, bounds.size.z) : 200;
     const axisLen = Math.max(maxDim * 0.3, 1e-3);
     const helper = new THREE.AxesHelper(axisLen);
+    const axisHex = [cssVar("--axis-x") || "#ff4d4d", cssVar("--axis-y") || "#4dff4d", cssVar("--axis-z") || "#4d7dff"];
+    const axisCol = axisHex.map((c) => new THREE.Color(c));
+    const colAttr = helper.geometry.getAttribute("color") as THREE.BufferAttribute;
+    for (let i = 0; i < 3; i++) {
+      colAttr.setXYZ(i * 2, axisCol[i]!.r, axisCol[i]!.g, axisCol[i]!.b);
+      colAttr.setXYZ(i * 2 + 1, axisCol[i]!.r, axisCol[i]!.g, axisCol[i]!.b);
+    }
+    colAttr.needsUpdate = true;
     this.axes.add(helper);
     const labels: [string, THREE.Vector3, string][] = [
-      ["X", new THREE.Vector3(axisLen * 1.12, 0, 0), "#ff4d4d"],
-      ["Y", new THREE.Vector3(0, axisLen * 1.12, 0), "#4dff4d"],
-      ["Z", new THREE.Vector3(0, 0, axisLen * 1.12), "#4d7dff"],
+      ["X", new THREE.Vector3(axisLen * 1.12, 0, 0), axisHex[0]!],
+      ["Y", new THREE.Vector3(0, axisLen * 1.12, 0), axisHex[1]!],
+      ["Z", new THREE.Vector3(0, 0, axisLen * 1.12), axisHex[2]!],
     ];
     for (const [text, pos, color] of labels) {
       const canvas = document.createElement("canvas");

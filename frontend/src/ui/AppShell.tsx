@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { Logo } from "./Logo";
-import { LocalOnlyChip } from "./components/LocalOnlyChip";
-import { PartChip } from "./components/PartChip";
 import { WorkControls } from "./components/WorkControls";
 import { useStore } from "../state/store";
 import type { Step } from "../state/store";
-import { PanelLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { SunIcon, MoonIcon } from "./icons";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "part", label: "Part" },
@@ -21,7 +19,7 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
   const frame = useStore((s) => s.frame);
   const setStep = useStore((s) => s.setStep);
   const checked = phase === "checked";
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = useStore((s) => s.panelCollapsed);
   const [theme, setTheme] = useState(() => (typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") || "dark" : "dark"));
   if (typeof document !== "undefined" && !document.documentElement.getAttribute("data-theme")) {
     document.documentElement.setAttribute("data-theme", "dark");
@@ -29,26 +27,16 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
 
   return (
     <div className={`planner-root${collapsed ? " planner-root-panel-collapsed" : ""}`}>
-      <header className="planner-topbar">
-        <div className="planner-topbar-group">
-          <a href="#/" className="planner-topbar-left">
-            <Logo height={14} />
-            <span className="brand-divider" aria-hidden="true" />
-            <span className="planner-wordmark">Weld Seam Planner</span>
-          </a>
-          <button type="button" className="planner-collapse-btn" aria-expanded={!collapsed} aria-controls="planner-panel" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? "Open settings panel" : "Close settings panel"}>
-            {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-            <PanelLeftIcon size={14} />
-            {collapsed ? "Show panel" : "Hide panel"}
-          </button>
-          <button type="button" className="planner-collapse-btn" onClick={() => { const next = theme === "dark" ? "light" : "dark"; setTheme(next); document.documentElement.setAttribute("data-theme", next); window.dispatchEvent(new CustomEvent("themechange")); }} aria-label="Toggle theme">
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </button>
-        </div>
-        <PartChip />
-        <div className="planner-topbar-group">
+      <header className="planner-topbar planner-topbar-split">
+        <a href="#/" className="planner-topbar-left" aria-label="Armatrix home">
+          <Logo height={14} />
+        </a>
+        <span className="planner-wordmark planner-wordmark-center">Weld Seam Planner</span>
+        <div className="planner-topbar-right">
           <WorkControls />
-          <LocalOnlyChip />
+          <button type="button" className="theme-toggle" onClick={() => { const next = theme === "dark" ? "light" : "dark"; setTheme(next); document.documentElement.setAttribute("data-theme", next); window.dispatchEvent(new CustomEvent("themechange")); }} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>
+            <span key={theme} className="theme-toggle-icon">{theme === "dark" ? <SunIcon size={16} /> : <MoonIcon size={16} />}</span>
+          </button>
         </div>
       </header>
       <aside id="planner-panel" className="planner-panel" aria-hidden={collapsed}>

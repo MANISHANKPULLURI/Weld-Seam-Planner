@@ -169,12 +169,14 @@ export type Store = {
   projection: Projection;
   viewMode: ViewMode;
   view: ViewId;
+  panelCollapsed: boolean;
   frame: Frame;
   generation: number;
 
   seams: Seam[];
   rejectedIds: string[];
   selectedSeamId: string | null;
+  hoverSeamId: string | null;
   featureChains: SeamPath[];
   detectSettings: DetectSettings;
   detection: Detection;
@@ -194,6 +196,7 @@ export type Store = {
   saveStatus: "idle" | "saving" | "saved" | "error";
   savedAt: number | null;
   undo: { label: string; at: number; state: Pick<Store, "seams" | "sequence" | "waits" | "rejectedIds" | "selectedSeamId"> } | null;
+  redo: { label: string; at: number; state: Pick<Store, "seams" | "sequence" | "waits" | "rejectedIds" | "selectedSeamId"> } | null;
   sequence: string[];
   waits: Record<string, number>;
   job: JobSettings;
@@ -214,6 +217,7 @@ export type Store = {
 
   setStep: (s: Step) => void;
   setTool: (t: Tool) => void;
+  setPanelCollapsed: (v: boolean) => void;
   setProjection: (p: Projection) => void;
   setViewMode: (m: ViewMode) => void;
   setView: (v: ViewId) => void;
@@ -229,6 +233,7 @@ export type Store = {
   rejectSeams: (ids: string[]) => void;
   addSeam: (path: SeamPath, source: SeamSource) => string;
   selectSeam: (id: string | null) => void;
+  setHoverSeam: (id: string | null) => void;
   renameSeam: (id: string, name: string) => void;
   reverseSeam: (id: string) => void;
   deleteSeam: (id: string) => void;
@@ -240,6 +245,7 @@ export type Store = {
   setReviewing: (on: boolean) => void;
   restoreCandidate: (seam: Seam) => void;
   undoLast: () => void;
+  redoLast: () => void;
   mergeSeams: (id: string, otherId: string) => string | null;
   setPendingAction: (action: PendingAction) => void;
   setXray: (on: boolean) => void;
@@ -282,6 +288,7 @@ const clearedPart = () => ({
   seams: [] as Seam[],
   rejectedIds: [] as string[],
   selectedSeamId: null,
+  hoverSeamId: null as string | null,
   featureChains: [] as SeamPath[],
   detection: { status: "idle", error: null, run: 0 } as Detection,
   pendingAction: null as PendingAction,
@@ -297,8 +304,8 @@ const clearedPart = () => ({
   job: { ...DEFAULT_JOB },
 });
 
-function remember(s: Store, label: string): Pick<Store, "undo"> {
-  return { undo: { label, at: Date.now(), state: { seams: s.seams, sequence: s.sequence, waits: s.waits, rejectedIds: s.rejectedIds, selectedSeamId: s.selectedSeamId } } };
+function remember(s: Store, label: string): Pick<Store, "undo" | "redo"> {
+  return { undo: { label, at: Date.now(), state: { seams: s.seams, sequence: s.sequence, waits: s.waits, rejectedIds: s.rejectedIds, selectedSeamId: s.selectedSeamId } }, redo: null };
 }
 
 function snapshot(s: Store): WorkState {
@@ -311,7 +318,7 @@ function snapshot(s: Store): WorkState {
   };
 }
 
-const transient = { focus: null, undo: null, reviewing: false, phase: "checked" as Phase, selectedSeamId: null, pendingAction: null as PendingAction, splitCuts: null, error: null, section: null, workArea: null, xray: false };
+const transient = { focus: null, undo: null, redo: null, reviewing: false, phase: "checked" as Phase, selectedSeamId: null, pendingAction: null as PendingAction, splitCuts: null, error: null, section: null, workArea: null, xray: false };
 
 // The procedure library is the user's own data: kept in the browser across reloads and parts.
 const PROCEDURES_KEY = "weld.procedures.v1";
@@ -330,6 +337,7 @@ export const useStore = create<Store>((set, get) => ({
   ...clearedPart(),
   tool: "select",
   projection: "perspective",
+  panelCollapsed: false,
   viewMode: "solid",
   view: "iso",
   generation: 0,
@@ -339,6 +347,8 @@ export const useStore = create<Store>((set, get) => ({
   savedAt: null,
   focus: null,
   undo: null,
+  redo: null,
+  hoverSeamId: null,
   splitCuts: null,
   procedures: loadProcedures(),
   xray: false,
@@ -433,6 +443,7 @@ export const useStore = create<Store>((set, get) => ({
   // Moving past the Part step accepts the units and up axis shown (they can still be changed later).
   setStep: (step) => set((s) => ({ step, frame: step !== "part" && !s.frame.confirmed ? { ...s.frame, confirmed: true } : s.frame, pendingAction: null, splitCuts: null })),
   setTool: (tool) => set({ tool }),
+  setPanelCollapsed: (panelCollapsed) => set({ panelCollapsed }),
   setProjection: (projection) => set({ projection }),
   setViewMode: (viewMode) => set({ viewMode }),
   setView: (view) => set({ view }),
@@ -474,12 +485,13 @@ export const useStore = create<Store>((set, get) => ({
     seams.forEach((x, i) => {
       if (wanted.has(x.id) && x.status === "candidate") seams[i] = { ...x, status: "accepted", name: nextName(seams) };
     });
-    return { seams };
+    return { ...remember(s, `Accepted ${wanted.size}`), seams };
   }),
 
   rejectSeams: (ids) => set((s) => {
     const gone = new Set(ids);
     return {
+      ...remember(s, `Rejected ${gone.size}`),
       seams: s.seams.filter((x) => !(gone.has(x.id) && x.status === "candidate")),
       rejectedIds: [...s.rejectedIds, ...ids],
       selectedSeamId: s.selectedSeamId && gone.has(s.selectedSeamId) ? null : s.selectedSeamId,
@@ -491,11 +503,12 @@ export const useStore = create<Store>((set, get) => ({
     const existing = get().seams.find((x) => x.status === "accepted" && duplicates(x, seam));
     if (existing) { set({ selectedSeamId: existing.id }); return existing.id; }
     // A candidate on the same line is replaced by the seam the user added.
-    set((s) => ({ seams: [...s.seams.filter((x) => x.id !== seam.id && !(x.status === "candidate" && duplicates(x, seam))), seam], selectedSeamId: seam.id }));
+    set((s) => ({ ...remember(s, `Added ${seam.name}`), seams: [...s.seams.filter((x) => x.id !== seam.id && !(x.status === "candidate" && duplicates(x, seam))), seam], selectedSeamId: seam.id }));
     return seam.id;
   },
 
   selectSeam: (selectedSeamId) => set({ selectedSeamId, pendingAction: null, splitCuts: null }),
+  setHoverSeam: (hoverSeamId) => set({ hoverSeamId }),
 
   renameSeam: (id, name) => set((s) => ({ seams: s.seams.map((x) => (x.id === id ? { ...x, name } : x)) })),
 
@@ -509,7 +522,16 @@ export const useStore = create<Store>((set, get) => ({
     seams: [...s.seams, { ...seam, status: "candidate", name: "" }],
     rejectedIds: s.rejectedIds.filter((x) => x !== seam.id),
   })),
-  undoLast: () => set((s) => (s.undo ? { ...s.undo.state, undo: null, pendingAction: null, splitCuts: null } : {})),
+  undoLast: () => set((s) => {
+    if (!s.undo) return {};
+    const redo = { label: s.undo.label, at: Date.now(), state: { seams: s.seams, sequence: s.sequence, waits: s.waits, rejectedIds: s.rejectedIds, selectedSeamId: s.selectedSeamId } };
+    return { ...s.undo.state, undo: null, redo, pendingAction: null, splitCuts: null };
+  }),
+  redoLast: () => set((s) => {
+    if (!s.redo) return {};
+    const undo = { label: s.redo.label, at: Date.now(), state: { seams: s.seams, sequence: s.sequence, waits: s.waits, rejectedIds: s.rejectedIds, selectedSeamId: s.selectedSeamId } };
+    return { ...s.redo.state, redo: null, undo, pendingAction: null, splitCuts: null };
+  }),
 
   deleteSeam: (id) => set((s) => ({
     ...remember(s, `Deleted ${s.seams.find((x) => x.id === id)?.name || "candidate"}`),
@@ -527,7 +549,7 @@ export const useStore = create<Store>((set, get) => ({
     for (const path of splitPath(seam, segment, t)) {
       parts.push({ ...seam, ...path, id: seamId(seam.source, path), name: parts.length === 0 ? seam.name : nextName([...rest, ...parts, seam]) });
     }
-    return { seams: [...rest, ...parts], selectedSeamId: parts[0]!.id, pendingAction: null };
+    return { ...remember(s, `Split ${seam.name}`), seams: [...rest, ...parts], selectedSeamId: parts[0]!.id, pendingAction: null };
   }),
 
   mergeSeams: (id, otherId) => {

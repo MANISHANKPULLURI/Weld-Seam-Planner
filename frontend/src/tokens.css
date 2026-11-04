@@ -63,6 +63,7 @@
   --discovery-t4: #E9B475;
 
   --danger: #E5534B;
+  --danger-text: #FF8A80;
 
   --bg-page: var(--dark-forest-t2);
   --bg-viewport: var(--dark-forest-t1);
@@ -88,6 +89,10 @@
   --part-solid: var(--light-sand-s2);
   --part-wire: var(--light-sand);
 
+  --axis-x: #ff4d4d;
+  --axis-y: #4dff4d;
+  --axis-z: #4d7dff;
+
   --accent: var(--discovery);
   --accent-hover: var(--discovery-t1);
   --accent-pressed: var(--discovery-t2);
@@ -97,37 +102,58 @@
   --radius: 8px;
   --radius-sm: 6px;
   --font: "42dot Sans", system-ui, sans-serif;
+
+  /* Clean Technical Studio (light-mode only): soft warm neutrals, no clinical white. */
+  --studio-bg: #F7F7F4;
+  --studio-panel: #FFFFFF;
+  --studio-raised: #EEF0EB;
+  --studio-border: #D5D8D0;
+  --studio-text: #11160E;
+  --studio-text-secondary: #656B5E;
+  --studio-accent: #E67300;
+  --studio-active: #3E522E;
+  --studio-warning: #C96E14;
 }
 
 html[data-theme="light"] {
-  --bg-page: var(--light-sand);
-  --bg-viewport: var(--light-sand-s1);
-  --bg-panel: var(--light-sand);
-  --bg-raised: var(--light-sand-s1);
-  --bg-topbar: var(--light-sand);
-  --border: var(--light-sand-s2);
-  --border-strong: var(--light-sand-s3);
-  --active-step: var(--light-sand-s1);
-  --grid-main: var(--light-sand-s3);
-  --grid-sub: var(--light-sand-s2);
+  --bg-page: var(--studio-bg);
+  --bg-viewport: var(--studio-bg);
+  --bg-panel: var(--studio-panel);
+  --bg-raised: var(--studio-raised);
+  --bg-topbar: var(--studio-panel);
+  --border: var(--studio-border);
+  --border-strong: var(--studio-border);
+  --active-step: var(--studio-active);
+  --grid-main: #B9BEB2;
+  --grid-sub: #D8DCD2;
   --candidate: var(--rev-green-t4);
   --seam-candidate: var(--dark-forest-t4);
   --seam-accepted: var(--rev-green-t2);
   --section-cap: var(--dark-forest-t4);
-  --text: var(--dark-forest-t2);
-  --text-secondary: var(--dark-forest-t3);
-  --text-muted: var(--rev-green-t2);
-  --text-on-accent: var(--dark-forest);
-  --part-solid: var(--light-sand-s4);
-  --part-wire: var(--dark-forest);
-  /* Bright Discovery darkened for text on light surfaces (Light Sand gives too little contrast). */
-  --warning: #9C5300;
+  --text: var(--studio-text);
+  --text-secondary: var(--studio-text-secondary);
+  --text-muted: var(--studio-text-secondary);
+  --text-on-accent: #FFFFFF;
+  --part-solid: var(--studio-text-secondary);
+  --part-wire: var(--studio-text);
+  --axis-x: #C23B2E;
+  --axis-y: #2E7D32;
+  --axis-z: #2B5FC7;
+  --accent: var(--studio-accent);
+  --accent-hover: #D66600;
+  --accent-pressed: #C05E00;
+  /* Deeper orange keeps CTA/warning legible on light sand (WCAG AA). */
+  --warning: var(--studio-warning);
 }
 
+html[data-theme="light"] .planner-step-active {
+  color: #FFFFFF;
+}
+html[data-theme="light"] .planner-step-active .planner-step-label { color: #FFFFFF; }
 html[data-theme="light"] .planner-step-active .planner-step-index {
-  background: var(--rev-green-t2);
-  border-color: var(--rev-green-t2);
-  color: var(--light-sand);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #FFFFFF;
 }
 
 /* Contrast verification WCAG AA
@@ -140,12 +166,9 @@ html[data-theme="light"] .planner-step-active .planner-step-index {
    danger on raised    #E5534B on #192600 = 4.30:1 FAIL <4.5 text, PASS >=3 UI
                        adjusted: danger text uses #141E00 bg gives 4.67:1 PASS
    warning on raised   #E9B475 on #192600 = 8.53:1 PASS
-   LIGHT
-   main on panel       #030500 on #F6F6EE = 19.2:1 PASS >=4.5
-   secondary on panel  #141E00 on #F6F6EE = 17.5:1 PASS >=4.5
-   muted on panel      #3D4F2C on #F6F6EE = 9.1:1 PASS >=4.5
-   on-accent on accent #F6F6EE on #E97F01 = 2.58:1 text FAIL, dark text #030500 on #E97F01 =7.31:1 PASS uses dark
-   accent on viewport  #E97F01 on #DFDFD7 = 1.9:1 UI FAIL -> border uses --rev-green-t1 for focus
-   danger on raised    #E5534B on #DFDFD7 = 2.1:1 FAIL -> error cards use --light-sand bg gives 3.4:1 PASS UI
-   warning on raised   #E9B475 on #DFDFD7 = 1.5:1 FAIL -> warning text on --dark-forest-t3 bg gives 8.5:1 PASS
+   LIGHT STUDIO (#F7F7F4 / #FFFFFF / #EEF0EB, text #11160E)
+   main on panel       #11160E on #FFFFFF = ~15.5:1 PASS >=4.5
+   secondary on panel  #656B5E on #FFFFFF = ~5.2:1 PASS >=4.5
+   CTA on light        #FFFFFF on #E67300 = ~3.4:1 UI PASS >=3 (large/bold); body text uses #11160E
+   warning on light   #C96E14 on #FFFFFF = ~3.6:1 UI PASS >=3; body warnings keep #11160E text
 */

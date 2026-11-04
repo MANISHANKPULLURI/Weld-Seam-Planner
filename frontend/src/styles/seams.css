@@ -132,8 +132,8 @@
 .seam-row-actions { display: flex; gap: 2px; padding-right: 6px; }
 
 .icon-btn {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
@@ -215,6 +215,7 @@
   z-index: 2;
 }
 .view-controls-top { top: 8px; right: 8px; }
+.view-controls-top-left { top: 8px; left: 8px; }
 .view-controls-bottom-left { bottom: 8px; left: 8px; }
 .view-controls-bottom-right { bottom: 8px; right: 8px; }
 
@@ -303,6 +304,49 @@
   height: 26px;
   font-size: 11px;
 }
+.view-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.view-select-label { display: inline-flex; align-items: center; gap: 6px; }
+.view-select {
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  color-scheme: light dark;
+}
+.view-select option { color: initial; }
+.seam-guide-compact { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.seam-details { position: sticky; bottom: 0; }
+/* Bottom hint slot keeps one fixed height so hovering Reverse/Split/Merge/Delete
+   swaps text without resizing the card (split text is the longest at ~3 lines). */
+.seam-details .seam-action-help,
+.seam-details > .result-explainer:last-child { min-height: 4.5em; }
+.viewport-hint-error { border-color: var(--danger); }
+.viewport-hint-error .btn-link { pointer-events: auto; }
+.shortcut-overlay { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(0,0,0,0.5); }
+.shortcut-card { width: min(420px, 90%); max-height: 80%; overflow: auto; padding: 12px 14px; border-radius: var(--radius); background: var(--bg-panel); border: 1px solid var(--border-strong); }
+.shortcut-list { margin: 8px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.shortcut-list div { display: flex; justify-content: space-between; gap: 12px; }
+.shortcut-list dt { color: var(--text); font-weight: 600; }
+.shortcut-list dd { margin: 0; color: var(--text-secondary); }
+.narrow-notice { display: none; }
+@media (max-width: 900px) {
+  .narrow-notice { display: block; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 7; padding: 6px 12px; border-radius: var(--radius-sm); background: var(--bg-panel); border: 1px solid var(--warning); color: var(--warning); font-size: 12px; white-space: nowrap; }
+}
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.result-danger-text { color: var(--danger-text); }
 .view-btn-compact svg { width: 10px; height: 10px; }
 
 .orientation-gizmo-host {
@@ -476,7 +520,7 @@
 .focus-chip strong { color: var(--text); font-weight: 500; }
 .undo-toast { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; padding: 8px 14px; border-radius: var(--radius); background: var(--bg-panel); border: 1px solid var(--border-strong); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); font-size: 13px; color: var(--text); z-index: 6; }
 .undo-key { font-size: 11px; color: var(--text-muted); }
-.step-nav { position: sticky; bottom: 0; display: flex; flex-direction: column; gap: 6px; padding: 10px 0 4px; background: linear-gradient(to bottom, transparent, var(--bg-panel) 30%); }
+.step-nav { position: sticky; bottom: 0; display: flex; flex-direction: column; gap: 6px; padding: 10px 0 8px; background: var(--bg-panel); border-top: 1px solid var(--border); }
 .step-nav-buttons { display: flex; justify-content: space-between; gap: 8px; }
 .step-nav-buttons button { flex: 1; }
 .step-nav-note { margin: 0; }
