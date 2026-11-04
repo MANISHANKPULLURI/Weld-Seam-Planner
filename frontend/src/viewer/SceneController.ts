@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { MeshBVH, acceleratedRaycast } from "three-mesh-bvh";
 import { UP_AXIS_QUATERNION_XYZW } from "@weld/core";
+import { SeamLayer } from "./SeamLayer.ts";
+import type { PathHit, SeamDrawItem } from "./SeamLayer.ts";
 import type { UpAxis } from "@weld/core";
 import { chooseEngineeringInterval, viewDirectionForId as viewDir, computeFitDistance as calcFitDistance } from "./viewMath.ts";
 
@@ -33,6 +36,11 @@ export class SceneController {
   private partGroup = new THREE.Group();
   private gridInterval = 10;
   private cameraAnimation = 0;
+  private seamLayer = new SeamLayer();
+  private xray = false;
+  private dimmed = false;
+  private clipPlane = new THREE.Plane();
+  private clipping: THREE.Plane[] = [];
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private onDblClickHandler: ((e: MouseEvent) => void) | null = null;
@@ -64,6 +72,7 @@ export class SceneController {
     this.renderer.domElement.style.display = "block";
     this.renderer.domElement.style.width = "100%";
     this.renderer.domElement.style.height = "100%";
+    this.renderer.localClippingEnabled = true;
     host.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -74,6 +83,8 @@ export class SceneController {
     this.scene.add(this.grid);
     this.scene.add(this.axes);
     this.scene.add(this.partGroup);
+    this.partGroup.add(this.seamLayer.group);
+    this.raycaster.firstHitOnly = true;
     this.buildGridForBounds(null);
     this.buildAxesForBounds(null);
 
@@ -278,6 +289,7 @@ export class SceneController {
   }
 
   updateTheme() {
+    this.seamLayer.updateTheme();
     const bg = cssVar("--bg-viewport");
     if (bg) this.scene.background = new THREE.Color(bg);
     if (this.mesh) {
@@ -428,16 +440,6 @@ export class SceneController {
 
   getGridInterval(): number { return this.gridInterval; }
 
-  raycastWorld(event: MouseEvent): THREE.Vector3 | null {
-    if (!this.mesh) return null;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    const hits = this.raycaster.intersectObject(this.mesh, false);
-    return hits.length ? hits[0]!.point.clone() : null;
-  }
-
 
   // Geometry stays in file coordinates. The part group applies the unit scale and the up-axis
   // rotation, so the scene, grid and camera are always in millimetres, Z up.
@@ -458,8 +460,11 @@ export class SceneController {
     geo.computeBoundingSphere();
 
     const solidColor = cssVar("--part-solid") || (document.documentElement.getAttribute("data-theme") === "light" ? "#141E00" : "#C5C5BD");
-    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor), flatShading: true, roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor), flatShading: true, roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 4 });
+    mat.clippingPlanes = this.clipping;
+    geo.boundsTree = new MeshBVH(geo, { indirect: true });
     this.mesh = new THREE.Mesh(geo, mat);
+    this.mesh.raycast = acceleratedRaycast;
     this.mesh.userData.isModel = true;
     this.partGroup.add(this.mesh);
 
@@ -518,21 +523,123 @@ export class SceneController {
   }
 
   setDimmed(v: boolean) {
+    this.dimmed = v;
+    this.applyOpacity();
+  }
+
+  setXray(on: boolean) {
+    this.xray = on;
+    this.seamLayer.setXray(on);
+    this.applyOpacity();
+  }
+
+  private applyOpacity() {
     if (!this.mesh) return;
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
-    mat.opacity = v ? 0.45 : 1;
-    mat.transparent = v;
-    if (this.triangleEdges) (this.triangleEdges.material as THREE.LineBasicMaterial).opacity = v ? 0.3 : 0.9;
+    mat.opacity = this.dimmed ? 0.45 : this.xray ? 0.2 : 1;
+    mat.transparent = mat.opacity < 1;
+    mat.depthWrite = !this.xray;
+    mat.needsUpdate = true;
+    if (this.triangleEdges) (this.triangleEdges.material as THREE.LineBasicMaterial).opacity = this.dimmed ? 0.3 : 0.9;
     this.render();
+  }
+
+  // Cuts the part at `offset` (0..1) along a world axis, keeping the lower side. Seams stay visible.
+  setSection(section: { axis: "x" | "y" | "z"; offset: number } | null) {
+    this.clipping.length = 0;
+    if (section && this.bounds) {
+      const normal = new THREE.Vector3(section.axis === "x" ? -1 : 0, section.axis === "y" ? -1 : 0, section.axis === "z" ? -1 : 0);
+      const at = this.bounds.min.getComponent("xyz".indexOf(section.axis)) + this.bounds.size.getComponent("xyz".indexOf(section.axis)) * section.offset;
+      this.clipPlane.set(normal, at);
+      this.clipping.push(this.clipPlane);
+    }
+    this.render();
+  }
+
+  setIndices(indices: Uint32Array) {
+    if (!this.mesh) return;
+    const geo = this.mesh.geometry as THREE.BufferGeometry;
+    geo.setIndex(new THREE.BufferAttribute(indices, 1));
+    geo.boundsTree = new MeshBVH(geo, { indirect: true });
+    if (this.triangleEdges) { this.partGroup.remove(this.triangleEdges); this.triangleEdges.geometry.dispose(); (this.triangleEdges.material as THREE.Material).dispose(); this.triangleEdges = null; }
+    this.setViewMode(this.viewMode);
+  }
+
+  setSeams(items: SeamDrawItem[]) {
+    this.seamLayer.setSeams(items);
+    this.render();
+  }
+
+  setSeamHighlight(selectedId: string | null, hoverId: string | null) {
+    this.seamLayer.setHighlight(selectedId, hoverId);
+    this.render();
+  }
+
+  setSeamPreview(points: Float32Array | null, closed = false) {
+    this.seamLayer.setPreview(points, closed);
+    this.render();
+  }
+
+  // Nearest drawn seam under the cursor, ignoring seams hidden behind the part (unless X-ray is on).
+  pickSeam(event: { clientX: number; clientY: number }): string | null {
+    const items = this.seamLayer.drawn;
+    const hit = this.pickPath(items, event);
+    return hit ? items[hit.index]!.id : null;
+  }
+
+  pickPath(paths: { points: Float32Array; closed: boolean }[], event: { clientX: number; clientY: number }, maxPixels = 8): PathHit | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const hits = SeamLayer.pick(paths, this.partGroup.matrixWorld, this.camera, { w: rect.width, h: rect.height }, event.clientX - rect.left, event.clientY - rect.top, maxPixels);
+    if (this.xray || !this.mesh) return hits[0] ?? null;
+    const slack = (this.bounds?.sphereRadius ?? 1) * 0.005;
+    // Nearest visible one: cast toward each seam point (not through the cursor beside it) and skip hidden ones.
+    return hits.find((hit) => {
+      const ndc = hit.world.clone().project(this.camera);
+      this.raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), this.camera);
+      const surface = this.raycaster.intersectObject(this.mesh!, false)[0];
+      return !surface || this.raycaster.ray.origin.distanceTo(hit.world) <= surface.distance + slack;
+    }) ?? null;
+  }
+
+  // Point on the visible surface in part (file) coordinates, snapped to a nearby corner, with its outward normal.
+  surfacePoint(event: { clientX: number; clientY: number }, snapPixels = 10): { point: [number, number, number]; normal: [number, number, number]; snapped: boolean } | null {
+    if (!this.mesh) return null;
+    this.setRayFromEvent(event);
+    const hit = this.raycaster.intersectObject(this.mesh, false)[0];
+    if (!hit || !hit.face) return null;
+
+    const geo = this.mesh.geometry as THREE.BufferGeometry;
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+    const local = this.partGroup.worldToLocal(hit.point.clone());
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const toScreen = (v: THREE.Vector3) => {
+      const p = v.clone().applyMatrix4(this.partGroup.matrixWorld).project(this.camera);
+      return [(p.x + 1) / 2 * rect.width + rect.left, (1 - p.y) / 2 * rect.height + rect.top];
+    };
+
+    let snapped = false;
+    for (const v of [hit.face.a, hit.face.b, hit.face.c]) {
+      const corner = new THREE.Vector3().fromBufferAttribute(pos, v);
+      const [sx, sy] = toScreen(corner);
+      if (Math.hypot(sx! - event.clientX, sy! - event.clientY) <= snapPixels) { local.copy(corner); snapped = true; break; }
+    }
+
+    const n = hit.face.normal;
+    return { point: [local.x, local.y, local.z], normal: [n.x, n.y, n.z], snapped };
+  }
+
+  private setRayFromEvent(event: { clientX: number; clientY: number }) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.mouse, this.camera);
   }
 
   fadeIn() {
     if (!this.mesh) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const mat = this.mesh.material as THREE.MeshStandardMaterial;
-      mat.opacity = 1; mat.transparent = false;
-      if (this.triangleEdges) (this.triangleEdges.material as THREE.LineBasicMaterial).opacity = 0.9;
-      this.render(); return;
+      this.applyOpacity();
+      return;
     }
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
     mat.transparent = true; mat.opacity = 0;
@@ -544,7 +651,7 @@ export class SceneController {
       if (this.triangleEdges) (this.triangleEdges.material as THREE.LineBasicMaterial).opacity = t * 0.9;
       this.render();
       if (t < 1) requestAnimationFrame(step);
-      else { mat.transparent = false; if (this.triangleEdges) (this.triangleEdges.material as THREE.LineBasicMaterial).transparent = false; }
+      else { if (this.triangleEdges) (this.triangleEdges.material as THREE.LineBasicMaterial).transparent = false; this.applyOpacity(); }
     };
     requestAnimationFrame(step);
   }

@@ -1,4 +1,5 @@
 import { useStore } from "../state/store";
+import type { DetectOptions } from "@weld/core";
 import type { MeshWorkerRequest, MeshWorkerResponse } from "../workers/protocol";
 
 let worker: Worker | null = null;
@@ -64,5 +65,26 @@ export function repairCurrentMesh() {
       else if (message.type === "error") s.failRepair(generation, message.message);
     },
     () => useStore.getState().failRepair(generation, "Repair failed in this browser."),
+  );
+}
+
+export function detectSeams(options: DetectOptions) {
+  const state = useStore.getState();
+  const mesh = state.mesh;
+  if (!mesh) return;
+
+  const generation = state.startDetect();
+  const id = ++requestId;
+
+  run(
+    currentWorker(),
+    { type: "detect", id, vertices: mesh.positions, indices: mesh.orientedIndices, bodyOfTriangle: mesh.bodyOfTriangle, options },
+    [],
+    (message) => {
+      const s = useStore.getState();
+      if (message.type === "detected") s.finishDetect(generation, message.result);
+      else if (message.type === "error") s.failDetect(generation, message.message);
+    },
+    () => useStore.getState().failDetect(generation, "Seam detection failed in this browser."),
   );
 }

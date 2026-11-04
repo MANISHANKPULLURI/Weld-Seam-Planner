@@ -10,3 +10,8 @@ export * from "./mesh/units.ts";
 export * from "./mesh/hash.ts";
 export * from "./mesh/pipeline.ts";
 export * from "./schema/index.ts";
+export * from "./seams/types.ts";
+export { chainSegments } from "./seams/chain.ts";
+export type { Segment } from "./seams/chain.ts";
+export * from "./seams/detect.ts";
+export * from "./seams/edit.ts";

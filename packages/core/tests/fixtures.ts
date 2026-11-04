@@ -31,6 +31,46 @@ export function box(x0: number, y0: number, z0: number, x1: number, y1: number, 
 }
 
 
+// Extrudes a simple polygon drawn in the XZ plane along Y. Winding is left to analyseMesh to fix.
+export function prism(outline: [number, number][], length: number): Tri[] {
+  const tris: Tri[] = [];
+  for (const [i, j, k] of earClip(outline)) {
+    const [a, b, c] = [outline[i]!, outline[j]!, outline[k]!];
+    tris.push([[a[0], 0, a[1]], [b[0], 0, b[1]], [c[0], 0, c[1]]]);
+    tris.push([[a[0], length, a[1]], [c[0], length, c[1]], [b[0], length, b[1]]]);
+  }
+  outline.forEach((p, i) => {
+    const q = outline[(i + 1) % outline.length]!;
+    tris.push([[p[0], 0, p[1]], [q[0], 0, q[1]], [q[0], length, q[1]]], [[p[0], 0, p[1]], [q[0], length, q[1]], [p[0], length, p[1]]]);
+  });
+  return tris;
+}
+
+function earClip(poly: [number, number][]): [number, number, number][] {
+  const idx = poly.map((_, i) => i);
+  const area = poly.reduce((s, p, i) => s + p[0] * poly[(i + 1) % poly.length]![1] - poly[(i + 1) % poly.length]![0] * p[1], 0);
+  if (area < 0) idx.reverse();
+  const cross = (o: number[], a: number[], b: number[]) => (a[0]! - o[0]!) * (b[1]! - o[1]!) - (a[1]! - o[1]!) * (b[0]! - o[0]!);
+  const out: [number, number, number][] = [];
+  while (idx.length > 3) {
+    let clipped = false;
+    for (let n = 0; n < idx.length && !clipped; n++) {
+      const i = idx[(n + idx.length - 1) % idx.length]!, j = idx[n]!, k = idx[(n + 1) % idx.length]!;
+      const [a, b, c] = [poly[i]!, poly[j]!, poly[k]!];
+      if (cross(a, b, c) <= 1e-12) continue;
+      const inside = idx.some((m) => m !== i && m !== j && m !== k && cross(a, b, poly[m]!) >= 0 && cross(b, c, poly[m]!) >= 0 && cross(c, a, poly[m]!) >= 0);
+      if (inside) continue;
+      out.push([i, j, k]);
+      idx.splice(n, 1);
+      clipped = true;
+    }
+    if (!clipped) throw new Error("earClip: no ear found");
+  }
+  out.push([idx[0]!, idx[1]!, idx[2]!]);
+  return out;
+}
+
+
 export function asciiStl(tris: Tri[], name = "part"): string {
   const lines = [`solid ${name}`];
   for (const t of tris) {

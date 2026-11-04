@@ -1,4 +1,4 @@
-import { MeshError, analyseMesh, repairMesh, sha256Hex, writeBinaryStl } from "@weld/core";
+import { MeshError, analyseMesh, detectSeams, repairMesh, sha256Hex, writeBinaryStl } from "@weld/core";
 import type { MeshStage } from "@weld/core";
 import type { MeshWorkerRequest, MeshWorkerResponse } from "./protocol";
 
@@ -59,6 +59,12 @@ scope.onmessage = async (event) => {
         },
         [result.vertices.buffer, result.indices.buffer, result.orientedIndices.buffer, result.bodyOfTriangle.buffer],
       );
+      return;
+    }
+
+    if (request.type === "detect") {
+      const result = detectSeams(request.vertices, request.indices, request.bodyOfTriangle, request.options);
+      send({ type: "detected", id: request.id, result });
       return;
     }
 
