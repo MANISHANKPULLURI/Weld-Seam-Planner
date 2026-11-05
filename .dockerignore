@@ -1,6 +1,9 @@
 .git
 .github
 docs
+.opencode
+.impeccable
+skills-lock.json
 **/node_modules
 **/dist
 **/.env
