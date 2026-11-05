@@ -7,19 +7,22 @@ export type OrientResult = {
   patches: number;
 };
 
-// fileNormals: the normals stored in the STL, one per triangle (zero when missing).
-// islands: false skips island flipping, for meshes that are already oriented (repair).
+
+
 export type OrientOptions = { onProgress?: (fraction: number) => void; fileNormals?: Float32Array | null; islands?: boolean };
 
 type Patch = { faces: number[]; open: number; neighbours: Map<number, number>; min: number[]; max: number[] };
 
-// Components are faces joined across manifold edges.
-// - A closed component (a watertight shell) gets classic winding propagation, then the file's majority
-//   winding, then signed volume: negative volume flips it, unless it sits inside another shell (a cavity).
-// - An open component (cracks, assemblies) is split into patches whose winding already agrees; a patch
-//   flips only when at least half of its border disagrees with one larger patch, i.e. an island of
-//   reversed faces. Propagating across assembly junctions flipped 22% of a correctly wound 108-body
-//   file (ray voting did no better), so open parts keep the file's winding everywhere else.
+
+
+
+
+
+
+
+/**
+ * orient faces outward with consistent winding across patches
+ */
 export function orientFaces(vertices: Float32Array, indices: Uint32Array, topology: Topology, options: OrientOptions = {}): OrientResult {
 
   const faceCount = indices.length / 3;
@@ -97,7 +100,10 @@ export function orientFaces(vertices: Float32Array, indices: Uint32Array, topolo
 }
 
 
-// Breadth-first winding propagation from the first face, then keep whichever way most faces already were.
+
+/**
+ * propagate consistent winding across a connected face patch
+ */
 function propagate(faces: number[], indices: Uint32Array, twin: Int32Array, flip: Uint8Array) {
 
   const seen = new Set<number>([faces[0]!]);
@@ -122,6 +128,9 @@ function propagate(faces: number[], indices: Uint32Array, twin: Int32Array, flip
 }
 
 
+/**
+ * flip isolated open patches to match neighbours or file normals
+ */
 function flipIslands(faces: number[], vertices: Float32Array, indices: Uint32Array, twin: Int32Array, usable: Uint8Array, flip: Uint8Array, fileNormals: Float32Array | null) {
 
   const patchOf = new Map<number, number>();
@@ -148,8 +157,8 @@ function flipIslands(faces: number[], vertices: Float32Array, indices: Uint32Arr
 
   if (patches.length === 1) return;
 
-  // Only smooth borders vote: a reversed island inside a surface continues it, while a sharp
-  // disagreeing border is a junction between parts and counts as open.
+  
+  
   for (const f of faces) {
     const patch = patches[patchOf.get(f)!]!;
     for (let k = 0; k < 3; k++) {
@@ -179,8 +188,11 @@ function flipIslands(faces: number[], vertices: Float32Array, indices: Uint32Arr
 }
 
 
-// CAD exporters usually write normals from the true surface, so normals that agree with the
-// winding mean the winding is intentional. No stored normals (all zero) is no evidence either way.
+
+
+/**
+ * test whether stored file normals agree with computed winding
+ */
 function fileAgrees(faces: number[], vertices: Float32Array, indices: Uint32Array, fileNormals: Float32Array | null): boolean {
   if (!fileNormals) return false;
   let agree = 0, disagree = 0;
@@ -194,14 +206,20 @@ function fileAgrees(faces: number[], vertices: Float32Array, indices: Uint32Arra
   return agree > disagree;
 }
 
-// The two triangles fold onto the same side of their shared edge: two parts touching back to back,
-// not one surface. Decided from geometry, so it does not depend on the (possibly wrong) winding.
+
+
+/**
+ * test whether an edge is folded sharply back on itself
+ */
 function folded(vertices: Float32Array, indices: Uint32Array, h: number, t: number): boolean {
   return bend(vertices, indices, h, t) > 0.95;
 }
 
-// Cosine between the two triangles' directions away from their shared edge, from geometry alone:
-// -1 means one flat surface continuing, 0 a right-angle corner, +1 folded flat onto each other.
+
+
+/**
+ * compute cosine of the bend angle across a shared edge
+ */
 function bend(vertices: Float32Array, indices: Uint32Array, h: number, t: number): number {
 
   const f = (h / 3) | 0, g = (t / 3) | 0;
@@ -222,6 +240,9 @@ function bend(vertices: Float32Array, indices: Uint32Array, h: number, t: number
   return d / (Math.sqrt((u[0]! ** 2 + u[1]! ** 2 + u[2]! ** 2) * (w[0]! ** 2 + w[1]! ** 2 + w[2]! ** 2)) || 1);
 }
 
+/**
+ * find the vertex of a face not on a given edge
+ */
 function opposite(indices: Uint32Array, face: number, a: number, b: number): number {
   for (let k = 0; k < 3; k++) {
     const v = indices[face * 3 + k]!;
@@ -230,9 +251,12 @@ function opposite(indices: Uint32Array, face: number, a: number, b: number): num
   return indices[face * 3]!;
 }
 
-// A cavity wall lies entirely inside the other shell: checked with the generalized winding number
-// (sum of solid angles, Van Oosterom & Strackee 1983) at a few of its vertices. Bounding boxes alone
-// were not enough: a rotated tube's box fits inside a crossing plate's box.
+
+
+
+/**
+ * test whether one patch lies inside another closed shell
+ */
 function inside(inner: Patch, outer: Patch, vertices: Float32Array, indices: Uint32Array): boolean {
   const step = Math.max(1, Math.floor(inner.faces.length / 3));
   for (let i = 0; i < inner.faces.length; i += step) {
@@ -242,6 +266,9 @@ function inside(inner: Patch, outer: Patch, vertices: Float32Array, indices: Uin
   return true;
 }
 
+/**
+ * compute solid angle winding number of a point around faces
+ */
 function windingNumber(px: number, py: number, pz: number, faces: number[], vertices: Float32Array, indices: Uint32Array): number {
   let total = 0;
   for (const f of faces) {
@@ -257,11 +284,17 @@ function windingNumber(px: number, py: number, pz: number, faces: number[], vert
   return total / (4 * Math.PI);
 }
 
+/**
+ * test whether one bounding box strictly contains another
+ */
 function contains(outer: Patch, inner: Patch): boolean {
   return [0, 1, 2].every((k) => outer.min[k]! <= inner.min[k]! && outer.max[k]! >= inner.max[k]!) &&
     [0, 1, 2].some((k) => outer.min[k]! < inner.min[k]! || outer.max[k]! > inner.max[k]!);
 }
 
+/**
+ * compute min and max bounds of a face collection
+ */
 function boundsOf(vertices: Float32Array, indices: Uint32Array, faces: number[]) {
   const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
   for (const f of faces) {
@@ -277,6 +310,9 @@ function boundsOf(vertices: Float32Array, indices: Uint32Array, faces: number[])
   return { min, max };
 }
 
+/**
+ * compute signed volume of a face set around its centroid
+ */
 function signedVolume(vertices: Float32Array, indices: Uint32Array, faces: number[], flip: Uint8Array): number {
 
   let cx = 0, cy = 0, cz = 0;

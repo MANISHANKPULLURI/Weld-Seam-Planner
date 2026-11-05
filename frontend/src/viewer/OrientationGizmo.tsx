@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { SceneController, ViewId } from "./SceneController";
+import { rotateByQuaternion } from "./viewMath";
 
 type Props = {
   controller: SceneController | null;
@@ -15,6 +16,9 @@ const AXES: { id: ViewId; dir: [number, number, number]; label: string }[] = [
   { id: "bottom", dir: [0, 0, -1], label: "-Z" },
 ];
 
+/**
+ * render the clickable orientation cube
+ */
 export function OrientationGizmo({ controller, onView }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -41,18 +45,6 @@ export function OrientationGizmo({ controller, onView }: Props) {
       ctx.fill();
       ctx.stroke();
       const q = cam.quaternion;
-      function rotate(v: [number, number, number]): [number, number, number] {
-        const x = v[0], y = v[1], z = v[2];
-        const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
-        const ix = qw * x + qy * z - qz * y;
-        const iy = qw * y + qz * x - qx * z;
-        const iz = qw * z + qx * y - qy * x;
-        const iw = -qx * x - qy * y - qz * z;
-        const rx = ix * qw + iw * -qx + iy * -qz - iz * -qy;
-        const ry = iy * qw + iw * -qy + iz * -qx - ix * -qz;
-        const rz = iz * qw + iw * -qz + ix * -qy - iy * -qx;
-        return [rx, ry, rz];
-      }
       const colors: Record<string,string> = { X: "#ff4d4d", Y: "#2d8a2d", Z: "#2a5bd7" };
       const axesDefs: { dir:[number,number,number]; label:string; color:string }[] = [
         { dir: [1,0,0], label: "X", color: colors.X! },
@@ -60,7 +52,7 @@ export function OrientationGizmo({ controller, onView }: Props) {
         { dir: [0,0,1], label: "Z", color: colors.Z! },
       ];
       for (const a of axesDefs) {
-        const rotated = rotate(a.dir);
+        const rotated = rotateByQuaternion(a.dir, q);
         const px = cx + rotated[0] * 18;
         const py = cy - rotated[1] * 18;
         const alpha = rotated[2] > 0 ? 1 : 0.45;
@@ -91,6 +83,9 @@ export function OrientationGizmo({ controller, onView }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [controller]);
 
+  /**
+   * jump the camera to the clicked gizmo face
+   */
   function handleClick(e: React.MouseEvent) {
     const canvas = canvasRef.current;
     if (!canvas || !controller) { onView("iso"); return; }
@@ -100,22 +95,10 @@ export function OrientationGizmo({ controller, onView }: Props) {
     if (Math.hypot(x, y) < 8) { onView("iso"); return; }
     const cam = controller.getCamera() as unknown as { quaternion: { x:number;y:number;z:number;w:number } };
     const q = cam.quaternion;
-    function rotate(v: [number, number, number]): [number, number, number] {
-      const x = v[0], y = v[1], z = v[2];
-      const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
-      const ix = qw*x + qy*z - qz*y;
-      const iy = qw*y + qz*x - qx*z;
-      const iz = qw*z + qx*y - qy*x;
-      const iw = -qx*x - qy*y - qz*z;
-      const rx = ix*qw + iw*-qx + iy*-qz - iz*-qy;
-      const ry = iy*qw + iw*-qy + iz*-qx - ix*-qz;
-      const rz = iz*qw + iw*-qz + ix*-qy - iy*-qx;
-      return [rx, ry, rz];
-    }
     let best: ViewId = "iso";
     let bestDist = Infinity;
     for (const a of AXES) {
-      const rot = rotate(a.dir);
+      const rot = rotateByQuaternion(a.dir, q);
       const px = rot[0]*18;
       const py = -rot[1]*18;
       const d = Math.hypot(px - x, py - y);

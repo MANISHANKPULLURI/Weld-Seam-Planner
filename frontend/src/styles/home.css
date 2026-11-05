@@ -84,6 +84,29 @@ html[data-theme="light"] .home-logo .brand-logo { color: var(--rev-green); }
 .home-cta:hover { background: var(--accent-hover); }
 .home-cta:active { background: var(--accent-pressed); transform: scale(0.98); }
 
+.home-cta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.home-continue {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+}
+
+.home-continue:hover { border-color: var(--accent); color: var(--accent); }
+
 .home-steps {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

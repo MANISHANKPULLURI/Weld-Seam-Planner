@@ -3,6 +3,9 @@ import { useStore } from "../../state/store";
 import type { ViewId } from "../../state/store";
 import { GridIcon, RefreshIcon, CubeIcon, FitIcon, TriangleIcon, LayersIcon, PanelLeftIcon } from "../icons";
 
+/**
+ * render camera, view-mode and section controls
+ */
 export function ViewControls({ controller }: { controller: import("../../viewer/SceneController").SceneController | null }) {
   const projection = useStore((s) => s.projection);
   const viewMode = useStore((s) => s.viewMode);
@@ -17,20 +20,35 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
   const panelCollapsed = useStore((s) => s.panelCollapsed);
   const setPanelCollapsed = useStore((s) => s.setPanelCollapsed);
 
+  /**
+   * switch the camera projection
+   */
   function proj(p: "perspective" | "orthographic") {
     setProjection(p);
     controller?.setProjection(p);
   }
+  /**
+   * switch the part render mode
+   */
   function mode(m: "solid" | "wireframe" | "triangles") {
     setViewMode(m);
     controller?.setViewMode(m);
   }
+  /**
+   * reset the camera to the default view
+   */
   function reset() {
     controller?.resetView();
   }
+  /**
+   * fit the part into view
+   */
   function fit() {
     controller?.fitModel(true);
   }
+  /**
+   * fly the camera to a named view
+   */
   function v(id: ViewId) {
     setView(id);
     controller?.setView(id);
@@ -95,6 +113,9 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
   );
 }
 
+/**
+ * position the section cut and confirm a work area
+ */
 function SectionPanel({ controller }: { controller: import("../../viewer/SceneController").SceneController | null }) {
   const section = useStore((s) => s.section)!;
   const workArea = useStore((s) => s.workArea);
@@ -108,6 +129,9 @@ function SectionPanel({ controller }: { controller: import("../../viewer/SceneCo
   const [mmText, setMmText] = useState<string | null>(null);
   const [mmError, setMmError] = useState<string | null>(null);
 
+  /**
+   * move the section cut to a typed millimetre value
+   */
   function commitMm(raw: string) {
     if (raw.trim() === "") { setMmError(null); return; }
     const n = Number(raw);
@@ -116,6 +140,9 @@ function SectionPanel({ controller }: { controller: import("../../viewer/SceneCo
     setSection({ ...section, offset: Math.min(1, Math.max(0, (n - min) / (size || 1))) });
   }
 
+  /**
+   * lock the current section as the work area
+   */
   function confirm() {
     const plane = controller?.sectionInPartSpace();
     if (plane) setWorkArea({ plane, label });

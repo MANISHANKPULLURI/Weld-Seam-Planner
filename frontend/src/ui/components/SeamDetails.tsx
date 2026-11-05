@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { JOINT_HELP } from "./SeamList";
+import { JOINT_HELP } from "../labels";
 import { SplitPanel } from "./SplitPanel";
 import { focusForSeam } from "../../lib/focus";
 import { mergeTargets, seamLengthMm, useStore } from "../../state/store";
@@ -13,6 +13,9 @@ const ACTION_HELP = {
 
 const SOURCE_LABEL = { inside_corner: "Inside corner", outside_corner: "Outside corner", contact: "Plates touch", intersection: "Parts intersect", edge_chain: "Picked edge", drawn: "Drawn by hand" } as const;
 
+/**
+ * act on the selected seam: keep, split, merge and more
+ */
 export function SeamDetails() {
   const seam = useStore((s) => s.seams.find((x) => x.id === s.selectedSeamId));
   const units = useStore((s) => s.frame.units);

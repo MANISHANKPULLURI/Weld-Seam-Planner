@@ -6,6 +6,9 @@ import { formatTime } from "../components/WeldSeamList";
 import { StepNav } from "../components/StepNav";
 import { PROCESS_LABEL } from "../components/ProcedureLibrary";
 
+/**
+ * review totals, checks and export the weld job
+ */
 export function ReviewStep() {
   const state = useStore();
   const { setJob, selectSeam, setStep, importJob } = useStore.getState();
@@ -16,7 +19,10 @@ export function ReviewStep() {
   const { errors, warnings } = draft.validation;
   const blocked = errors.length > 0;
 
-  // Issue paths index the ordered seam list (/seams/3); jump to that seam's settings.
+  
+  /**
+   * go to the step a validation issue points at
+   */
   const jump = (path: string) => {
     const index = Number(path.split("/")[2]);
     const id = Number.isFinite(index) ? orderedSeams(useStore.getState())[index]?.id : null;
@@ -24,26 +30,45 @@ export function ReviewStep() {
     else if (path === "/job/name") document.getElementById("job-name")?.focus();
   };
 
+  /**
+   * compile and seal the final weld job
+   */
   async function sealed(): Promise<WeldJob> {
     return sealWeldJob(previewJob(useStore.getState()));
   }
 
+  /**
+   * download the sealed weld job as JSON
+   */
   async function download() {
     const job = await sealed();
     const blob = new Blob([JSON.stringify(job, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `${job.job.name.replace(/[^\w.-]+/g, "_") || "weld_job"}.weldjob.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     setMessage(`Downloaded ${a.download}.`);
   }
 
+  /**
+   * copy the sealed weld job JSON to the clipboard
+   */
   async function copy() {
-    await navigator.clipboard.writeText(JSON.stringify(await sealed(), null, 2));
-    setMessage("Copied the weld job JSON.");
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(await sealed(), null, 2));
+      setMessage("Copied the weld job JSON.");
+    } catch {
+      setMessage("Copy failed in this browser. Use Download JSON instead.");
+    }
   }
 
+  /**
+   * import and validate a weld job file
+   */
   async function onImport(file: File) {
     try {
       const parsed = weldJobSchema.safeParse(JSON.parse(await file.text()));

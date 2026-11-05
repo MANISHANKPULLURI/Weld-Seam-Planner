@@ -3,6 +3,9 @@ import { analyseMesh, buildTopology, labelBodies, orientFaces, repairMesh, weldV
 import { OUTWARD_CUBE, binaryStl, box, indexed, reversed, signedVolume } from "./fixtures.ts";
 import type { Tri } from "./fixtures.ts";
 
+/**
+ * flatten test triangles into a float32 position array
+ */
 const soup = (tris: Tri[]) => new Float32Array(tris.flat(2));
 
 describe("weldVertices", () => {
@@ -53,6 +56,9 @@ describe("topology and bodies", () => {
 
 describe("orientFaces", () => {
 
+/**
+ * orient indexed test triangles and return mesh plus result
+ */
   const orient = (tris: Tri[]) => {
     const { vertices, indices } = indexed(tris);
     const result = orientFaces(vertices, indices, buildTopology(indices, vertices.length / 3));

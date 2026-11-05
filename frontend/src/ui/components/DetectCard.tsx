@@ -1,6 +1,9 @@
 import { autoMinLengthMm, useStore } from "../../state/store";
 import { detectWithSettings, detectionScope } from "../../lib/meshClient";
 
+/**
+ * detect seams and tune the detection settings
+ */
 export function DetectCard() {
   const settings = useStore((s) => s.detectSettings);
   const detection = useStore((s) => s.detection);
@@ -64,6 +67,9 @@ export function DetectCard() {
   );
 }
 
+/**
+ * clamp a setting into its valid range
+ */
 function clamp(v: number, lo: number, hi: number) {
   return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo;
 }

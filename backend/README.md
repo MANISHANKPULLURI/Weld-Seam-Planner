@@ -5,7 +5,7 @@ Bun + Hono API for the Weld Seam Planner.
 ```bash
 bun install
 cp .env.example .env
-bun run dev        # http://localhost:8000, hot reload
+bun run dev        # hot reload
 bun test           # API, orientation and upload-security tests
 bun run check      # typecheck
 ```

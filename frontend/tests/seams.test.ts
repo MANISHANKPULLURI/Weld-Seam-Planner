@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { useStore } from "../src/state/store";
 import type { SeamCandidate } from "@weld/core";
 
+/**
+ * build a test seam candidate at position x
+ */
 const candidate = (id: string, x: number): SeamCandidate => ({
   id,
   source: "inside_corner",
@@ -16,6 +19,9 @@ const candidate = (id: string, x: number): SeamCandidate => ({
   length: 100,
 });
 
+/**
+ * feed test candidates through detection
+ */
 function detect(...ids: string[]) {
   const s = useStore.getState();
   const run = s.startDetect();

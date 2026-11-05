@@ -1,3 +1,6 @@
+/**
+ * write mesh triangles to a binary stl buffer with computed normals
+ */
 export function writeBinaryStl(vertices: Float32Array, indices: Uint32Array, header = "Armatrix Weld Seam Planner repaired mesh"): ArrayBuffer {
 
   const triangles = indices.length / 3;

@@ -6,6 +6,9 @@ import { StepNav } from "../components/StepNav";
 import { formatTime } from "../components/WeldSeamList";
 import { seamColor } from "../../viewer/seamColors";
 
+/**
+ * order the welds and set cooling waits
+ */
 export function SequenceStep() {
   const state = useStore();
   const list = orderedSeams(state);
@@ -30,7 +33,7 @@ export function SequenceStep() {
       <section className="result-card">
         <div className="seq-tools">
           <button type="button" className="btn-primary" onClick={() => { const mm = autoOrder(); setSaved(mm > 0.5 ? `Air travel cut by ${mm.toFixed(0)} mm.` : "Already the shortest route found."); }}>Auto order</button>
-          <NumberField label="Air speed" unit="mm/s" step={10} min={1} value={state.job.airSpeedMmS} hint="Torch speed between seams." onChange={(v) => v && setJob({ airSpeedMmS: v })} />
+          <NumberField label="Air speed" unit="mm/s" step={10} min={1} value={state.job.airSpeedMmS} hint="Torch speed between seams." onChange={(v) => { if (v != null) setJob({ airSpeedMmS: v }); }} />
         </div>
         {saved && <p className="result-explainer" role="status">{saved}</p>}
       </section>

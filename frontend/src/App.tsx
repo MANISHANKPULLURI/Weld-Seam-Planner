@@ -9,6 +9,9 @@ import { ReviewStep } from "./ui/steps/ReviewStep";
 import Viewport from "./Viewport";
 import { useStore } from "./state/store";
 
+/**
+ * track the current location hash as the route
+ */
 function useHash(): string {
   const [hash, setHash] = useState(() => location.hash || "#/");
   useEffect(() => {
@@ -24,6 +27,9 @@ function useHash(): string {
   return hash;
 }
 
+/**
+ * show the home page or the planner for the route
+ */
 export default function App() {
   const hash = useHash();
   const step = useStore((s) => s.step);

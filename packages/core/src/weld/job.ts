@@ -18,7 +18,7 @@ export type JobInput = {
   units: Units;
   upAxis: UpAxis;
   procedures: Procedure[];
-  seams: (WeldableSeam & { waitAfterS: number })[]; // already in execution order and direction
+  seams: (WeldableSeam & { waitAfterS: number })[]; 
   airSpeedMmS: number;
   waypointSpacingMm: number;
   supervision: "operator_confirm" | "auto";
@@ -28,7 +28,10 @@ type V = [number, number, number];
 const round = (v: number, d = 4) => Math.round(v * 10 ** d) / 10 ** d;
 const r3 = (v: V | number[]): V => [round(v[0]!), round(v[1]!), round(v[2]!)];
 
-// File coordinates to job frame: millimetres, Z up.
+
+/**
+ * convert part coordinates into job millimetres with axis handling
+ */
 function toJob(v: V, units: Units, upAxis: UpAxis): V {
   const s = MM_PER_UNIT[units];
   const z = toZUp(v, upAxis);
@@ -37,9 +40,12 @@ function toJob(v: V, units: Units, upAxis: UpAxis): V {
 
 const norm = (v: Vector3) => (v.lengthSq() > 0 ? v.normalize() : v.set(0, 0, 1));
 
-// Torch frame at a point: z points from the torch into the weld (opposite the corner bisector),
-// tilted sideways by the work-angle offset (about the tangent) and along the seam by the travel
-// angle (positive = push: the torch leans back so it points forward).
+
+
+
+/**
+ * build torch axis and tool quaternion from seam tangent and normals
+ */
 export function torchFrame(tangent: V, normalA: V, normalB: V, workOffsetDeg: number, travelDeg: number) {
   const t = norm(new Vector3(...tangent));
   const bis = norm(new Vector3(...normalA).add(new Vector3(...normalB)));
@@ -54,7 +60,11 @@ export function torchFrame(tangent: V, normalA: V, normalB: V, workOffsetDeg: nu
   return { axis: [z.x, z.y, z.z] as V, quaternion: [q.x, q.y, q.z, q.w] as [number, number, number, number] };
 }
 
+/**
+ * sample evenly spaced waypoints with torch frames along a seam
+ */
 export function waypointsFor(seam: WeldableSeam, units: Units, upAxis: UpAxis, spacingMm: number, torch: { work_angle_offset_deg: number; travel_angle_deg: number; stick_out_mm: number }): Waypoint[] {
+  const MAX_WAYPOINTS = 20000;
   const n = seam.points.length / 3;
   const pts: V[] = [], nA: V[] = [], nB: V[] = [];
   for (let i = 0; i < n; i++) {
@@ -67,7 +77,15 @@ export function waypointsFor(seam: WeldableSeam, units: Units, upAxis: UpAxis, s
   const cumulative = [0];
   for (let i = 1; i < pts.length; i++) cumulative.push(cumulative[i - 1]! + Math.hypot(...pts[i]!.map((v, k) => v - pts[i - 1]![k]!) as V));
   const total = cumulative[cumulative.length - 1]!;
-  const count = Math.max(1, Math.ceil(total / Math.max(0.1, spacingMm)));
+  let spacing = Number.isFinite(spacingMm) && spacingMm > 0 ? spacingMm : 0.1;
+  spacing = Math.max(0.1, spacing);
+  let count = Math.max(1, Math.ceil(total / spacing));
+  if (count + 1 > MAX_WAYPOINTS) {
+    
+    
+    spacing = total / (MAX_WAYPOINTS - 1);
+    count = MAX_WAYPOINTS - 1;
+  }
   const out: Waypoint[] = [];
 
   for (let k = 0; k <= count; k++) {
@@ -96,7 +114,10 @@ export function waypointsFor(seam: WeldableSeam, units: Units, upAxis: UpAxis, s
 
 export type JobIssue = Issue & { path: string; seamId?: string };
 
-// Rules that decide whether a job can be exported (errors) or needs a look (warnings).
+
+/**
+ * validate job inputs and collect seam errors and warnings
+ */
 export function validateJob(input: JobInput): { errors: JobIssue[]; warnings: JobIssue[] } {
   const errors: JobIssue[] = [], warnings: JobIssue[] = [];
   if (input.seams.length === 0) errors.push({ path: "/seams", code: "job.no_seams", message: "There are no seams to weld." });
@@ -114,6 +135,9 @@ export function validateJob(input: JobInput): { errors: JobIssue[]; warnings: Jo
   return { errors, warnings };
 }
 
+/**
+ * compute seam counts, lengths, times and travel totals for a job
+ */
 export function jobTotals(input: JobInput) {
   const evals = input.seams.map((s) => evaluateSeam(s, input.procedures, input.units, input.upAxis));
   const scale = MM_PER_UNIT[input.units];
@@ -139,9 +163,12 @@ export function jobTotals(input: JobInput) {
   };
 }
 
+/**
+ * compile validated inputs into a schema-ready weld job without integrity
+ */
 export function compileWeldJob(input: JobInput): Omit<WeldJob, "integrity"> {
   const created = input.meta.createdAt ?? new Date().toISOString();
-  const id = input.meta.id ?? `job_${created.slice(0, 16).replace(/[-:T]/g, "").replace(/^(\d{8})(\d{4})$/, "$1_$2")}_${Math.random().toString(36).slice(2, 4)}`;
+  const id = input.meta.id ?? `job_${crypto.randomUUID()}`;
   const usedProcedures = input.procedures.filter((p) => input.seams.some((s) => s.weld?.procedureId === p.id));
   const scale = MM_PER_UNIT[input.units];
   const minJob = toJob(input.part.min, input.units, input.upAxis), maxJob = toJob(input.part.max, input.units, input.upAxis);
@@ -173,7 +200,7 @@ export function compileWeldJob(input: JobInput): Omit<WeldJob, "integrity"> {
       geometry: { length_mm: round(seam.length * scale, 3), frame_source: single ? "single_surface" as const : "two_surfaces" as const, waypoints: waypointsFor(seam, input.units, input.upAxis, input.waypointSpacingMm, w.torch) },
       derived: { arc_energy_kj_mm: round(e.arcEnergy, 4), heat_input_kj_mm: round(e.heatInput, 4), arc_time_s: round(e.arcTime, 2) },
       access: { status: "not_checked" as const, method: null },
-      checks: { torch_clearance: "ok" as const },
+      checks: { torch_clearance: "not_checked" as const },
     }];
   });
 
@@ -206,22 +233,34 @@ export function compileWeldJob(input: JobInput): Omit<WeldJob, "integrity"> {
   };
 }
 
-// Canonical form for hashing: keys sorted at every level, no whitespace (RFC 8785 style; numbers
-// are already rounded when the job is built).
+/**
+ * Canonical form for hashing: keys sorted at every level, no whitespace (RFC 8785 style; numbers
+ * are already rounded when the job is built).
+ * serialize a value to canonical json with sorted keys for hashing
+ */
 export function canonicalJson(value: unknown): string {
+  if (typeof value === "number") return JSON.stringify(value === 0 ? 0 : value);
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
 }
 
+/**
+ * seal a weld job with a sha256 integrity hash
+ */
 export async function sealWeldJob(job: Omit<WeldJob, "integrity">): Promise<WeldJob> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error("Web Crypto unavailable — sealing needs a secure context");
   const bytes = new TextEncoder().encode(canonicalJson(job));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await subtle.digest("SHA-256", bytes);
   const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
   return { ...job, integrity: { content_sha256: hex } };
 }
 
+/**
+ * verify a sealed weld job hash against its content
+ */
 export async function verifyWeldJob(job: WeldJob): Promise<boolean> {
   const { integrity, ...rest } = job;
   return (await sealWeldJob(rest)).integrity.content_sha256 === integrity.content_sha256;

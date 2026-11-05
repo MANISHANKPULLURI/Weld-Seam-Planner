@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { seamCalc, useStore } from "../src/state/store";
 
+/**
+ * build a straight test seam path
+ */
 const path = (pts: number[], normal: number[]) => ({ points: new Float32Array(pts), normalsA: new Float32Array([...normal, ...normal]), normalsB: new Float32Array([1, 0, 0, 1, 0, 0]), closed: false, length: Math.hypot(pts[3]! - pts[0]!, pts[4]! - pts[1]!, pts[5]! - pts[2]!) });
 
 describe("procedures", () => {
@@ -49,6 +52,9 @@ describe("procedures", () => {
 });
 
 describe("sequence and job", () => {
+  /**
+   * load a part with three seams for sequence tests
+   */
   const seed = () => {
     useStore.getState().loadAnother();
     const g = useStore.getState().startAnalysing("p.stl", 10);

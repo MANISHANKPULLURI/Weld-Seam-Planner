@@ -8,7 +8,7 @@ Requires [Bun](https://bun.sh) 1.3+.
 
 ```bash
 bun install
-bun run dev        # frontend http://localhost:5173, API http://localhost:8000
+bun run dev        # frontend + API (API also serves the built frontend in production)
 bun run test       # core, frontend and backend tests
 bun run check      # TypeScript
 bun run build      # production frontend build (served by the backend)

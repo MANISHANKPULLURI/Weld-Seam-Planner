@@ -23,7 +23,7 @@ describe("POST /api/v1/mesh/validate", () => {
     const res = await app.request("/api/v1/mesh/validate", { method: "POST", headers: octet, body });
     expect(res.status).toBe(422);
     const json = await res.json() as { error: string };
-    expect(json.error).toContain("STL");
+    expect(json.error).toBe("Invalid mesh");
   });
 
   test("returns health and mesh for a valid cube", async () => {

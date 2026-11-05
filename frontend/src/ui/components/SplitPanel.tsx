@@ -2,8 +2,11 @@ import { useState } from "react";
 import { seamLengthMm, useStore } from "../../state/store";
 import type { Seam } from "../../state/store";
 
-// Split with a live preview: one cut placed by slider, mm box or by moving along the seam on the part,
-// or N equal parts. Nothing changes until "Split".
+
+
+/**
+ * choose where to split the selected seam
+ */
 export function SplitPanel({ seam }: { seam: Seam }) {
   const units = useStore((s) => s.frame.units);
   const cuts = useStore((s) => s.splitCuts) ?? [];
@@ -12,8 +15,14 @@ export function SplitPanel({ seam }: { seam: Seam }) {
   const [parts, setParts] = useState(Math.max(2, cuts.length + 1));
   const length = seamLengthMm(seam, units);
   const at = cuts[0] ?? length / 2;
+  /**
+   * round a cut distance to a tenth of a millimetre
+   */
   const round = (v: number) => Math.round(v * 10) / 10;
 
+  /**
+   * space cuts evenly along the seam length
+   */
   const even = (n: number) => Array.from({ length: n - 1 }, (_, i) => round((length * (i + 1)) / n));
   const pieces = seam.closed && mode === "one" ? [length] : [...cuts, length].map((c, i, all) => c - (i === 0 ? 0 : all[i - 1]!));
 

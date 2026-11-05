@@ -3,21 +3,32 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { existsSync } from "node:fs";
+import { realpath } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import { MAX_FILE_BYTES, meshRoutes } from "./controllers/mesh_detection_repair_controller/mesh.controller.ts";
-import { schemaRoutes } from "./controllers/weld_job_controller/schema.controller.ts";
-import { procedureRoutes, weldJobRoutes } from "./controllers/weld_job_controller/weldJob.controller.ts";
+import { config } from "./config.ts";
+import { meshRoutes } from "./routes/mesh.routes.ts";
+import { schemaRoutes } from "./routes/schema.routes.ts";
+import { weldJobRoutes } from "./routes/weld.routes.ts";
+import { procedureRoutes } from "./routes/procedures.routes.ts";
 
 
 export const app = new Hono();
 
 app.use(logger());
-app.use(secureHeaders());
-
-const corsOrigins = (process.env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    baseUri: ["'self'"],
+    objectSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+  },
+  strictTransportSecurity: "max-age=15552000; includeSubDomains",
+  xContentTypeOptions: "nosniff",
+  referrerPolicy: "no-referrer",
+}));
 
 app.use("/api/*", cors({
-  origin: corsOrigins.length ? corsOrigins : ["http://localhost:5173", "http://localhost:3000"],
+  origin: config.corsOrigins.length ? config.corsOrigins : [],
   allowMethods: ["GET", "POST", "OPTIONS"],
   allowHeaders: ["Content-Type"],
   maxAge: 600,
@@ -33,7 +44,7 @@ app.route("/api/v1/weld-jobs", weldJobRoutes);
 app.route("/api/v1/procedures", procedureRoutes);
 
 
-const staticDir = resolve(process.env.STATIC_DIR || join(import.meta.dir, "../../frontend/dist"));
+const staticDir = resolve(config.staticDir);
 
 if (existsSync(join(staticDir, "index.html"))) {
 
@@ -41,17 +52,47 @@ if (existsSync(join(staticDir, "index.html"))) {
 
     if (c.req.path.startsWith("/api/")) return next();
 
-    let requested = staticDir;
+    const rawPath = c.req.path;
+    if (rawPath.includes("\0")) return c.json({ error: "Bad request" }, 400);
 
+    let decoded: string;
     try {
-      requested = resolve(staticDir, "." + decodeURIComponent(c.req.path));
-    } catch {}
+      decoded = decodeURIComponent(rawPath);
+    } catch {
+      return c.json({ error: "Bad request" }, 400);
+    }
+    if (decoded.includes("\0")) return c.json({ error: "Bad request" }, 400);
 
-    const insideRoot = requested === staticDir || requested.startsWith(staticDir + sep);
+    
+    if (decoded.split("/").some((segment) => segment.startsWith(".") && segment.length > 1)) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    const resolved = resolve(staticDir, "." + decoded);
+
+    if (resolved !== staticDir && !resolved.startsWith(staticDir + sep)) {
+      return new Response(Bun.file(join(staticDir, "index.html")), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    }
+
+    let realRoot: string;
+    try {
+      realRoot = await realpath(staticDir);
+    } catch {
+      realRoot = staticDir;
+    }
+
+    let real: string;
+    try {
+      real = await realpath(resolved);
+    } catch {
+      real = resolved;
+    }
+
+    const insideRoot = real === realRoot || real.startsWith(realRoot + sep);
 
     if (insideRoot) {
-      const file = Bun.file(requested);
-      if (requested !== staticDir && await file.exists()) return new Response(file);
+      const file = Bun.file(real);
+      if (real !== realRoot && await file.exists()) return new Response(file);
     }
 
     return new Response(Bun.file(join(staticDir, "index.html")), { headers: { "Content-Type": "text/html; charset=utf-8" } });
@@ -64,13 +105,14 @@ app.notFound((c) => {
 });
 
 app.onError((err, c) => {
-  console.error(`${c.req.method} ${c.req.path} failed:`, err);
+  const safe = `${c.req.method} ${c.req.path}`.replace(/[\r\n]/g, "");
+  console.error(`${safe} failed:`, err);
   return c.json({ error: "Internal error" }, 500);
 });
 
 
 export default {
-  port: Number(process.env.PORT) || 8000,
-  maxRequestBodySize: MAX_FILE_BYTES + 1024 * 1024,
+  port: config.port,
+  maxRequestBodySize: config.maxFileBytes + 1024 * 1024,
   fetch: app.fetch,
 };

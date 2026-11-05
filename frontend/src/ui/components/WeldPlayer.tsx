@@ -8,7 +8,10 @@ import { formatTime } from "./WeldSeamList";
 
 const SPEEDS = [1, 5, 10, 30];
 
-// Plays the plan: the torch welds each seam in order at its travel speed, with air moves between.
+
+/**
+ * play the weld order simulation
+ */
 export function WeldPlayer({ controller }: { controller: SceneController | null }) {
   const seams = useStore((s) => s.seams);
   const sequence = useStore((s) => s.sequence);
@@ -53,6 +56,9 @@ export function WeldPlayer({ controller }: { controller: SceneController | null 
 
   if (!segments.length) return null;
 
+  /**
+   * play or pause the weld simulation
+   */
   const toggle = () => {
     if (!controller) return;
     if (playing) { controller.simPause(); setPlaying(false); }

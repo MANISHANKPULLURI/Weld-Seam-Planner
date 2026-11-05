@@ -13,6 +13,9 @@ const WORDMARK = [
 
 const VIEWBOX = { horizontal: "209 173 2021 202.2", mark: "209 173 377.6 202.1" } as const;
 
+/**
+ * render the armatrix logo in mark or full form
+ */
 export function Logo({ height = 18, variant = "horizontal", title = "Armatrix" }: { height?: number; variant?: "horizontal" | "mark"; title?: string }) {
   const [, , w, h] = VIEWBOX[variant].split(" ").map(Number);
   return (

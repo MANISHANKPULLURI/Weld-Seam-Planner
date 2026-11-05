@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { MeshError, parseStl } from "../src/index.ts";
 import { OUTWARD_CUBE, asciiStl, binaryStl } from "./fixtures.ts";
 
+/**
+ * encode a string to an array buffer for stl parsing
+ */
 const encode = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer;
 
 describe("parseStl", () => {

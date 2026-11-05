@@ -1,6 +1,9 @@
 import { useStore } from "../../state/store";
 import { formatCount } from "../../domain/mesh/describe";
 
+/**
+ * show the loaded part name, size and units state
+ */
 export function PartChip() {
   const part = useStore((s) => s.part);
   const health = useStore((s) => s.health);

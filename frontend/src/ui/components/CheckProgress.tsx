@@ -10,6 +10,9 @@ const STAGE_LABEL: Record<StageId, string> = {
   orient: "Orienting faces",
 };
 
+/**
+ * show part-analysis progress or repair status
+ */
 export function CheckProgress() {
   const phase = useStore((s) => s.phase);
   const stages = useStore((s) => s.stages);

@@ -8,7 +8,7 @@ export type UnitsGuess = { units: Units; note: string | null };
 
 export const MM_PER_UNIT: Record<Units, number> = { mm: 1, cm: 10, m: 1000, inch: 25.4 };
 
-// Rotation that takes the part into the Z-up job frame: +Y up turns +90° about X.
+
 export const UP_AXIS_QUATERNION_XYZW: Record<UpAxis, [number, number, number, number]> = {
   "+z": [0, 0, 0, 1],
   "+y": [Math.SQRT1_2, 0, 0, Math.SQRT1_2],
@@ -16,6 +16,9 @@ export const UP_AXIS_QUATERNION_XYZW: Record<UpAxis, [number, number, number, nu
 
 const INCH_NAME_PATTERN = /(inch|(^|[^a-z])in([^a-z]|$))/i;
 
+/**
+ * guess file units from bounding size and filename hints
+ */
 export function guessUnits(size: Vec3, fileName: string | null): UnitsGuess {
   const largest = Math.max(size.x, size.y, size.z);
   const baseName = (fileName ?? "").replace(/\.stl$/i, "");
@@ -38,18 +41,27 @@ export function guessUnits(size: Vec3, fileName: string | null): UnitsGuess {
   return { units: "mm", note: null };
 }
 
-// Shape alone cannot tell Y-up from Z-up: flat plates and long beams fool any aspect-ratio rule.
-// Most CAD exports are Z-up, so that is the guess and the user confirms it on screen.
+/**
+ * Shape alone cannot tell Y-up from Z-up: flat plates and long beams fool any aspect-ratio rule.
+ * Most CAD exports are Z-up, so that is the guess and the user confirms it on screen.
+ * guess up axis, defaulting to +z since shape alone is ambiguous
+ */
 export function guessUpAxis(_size: Vec3): UpAxis {
   return "+z";
 }
 
-// Bounding-box size in millimetres once the part is in the Z-up job frame.
+/**
+ * Bounding-box size in millimetres once the part is in the Z-up job frame.
+ * convert a part bounding size to millimetres in the z-up job frame
+ */
 export function partSizeMm(size: Vec3, units: Units, upAxis: UpAxis): Vec3 {
   const s = MM_PER_UNIT[units];
   return upAxis === "+y" ? { x: size.x * s, y: size.z * s, z: size.y * s } : { x: size.x * s, y: size.y * s, z: size.z * s };
 }
 
+/**
+ * format a dimension compactly for unit guess notes
+ */
 function formatNumber(v: number): string {
   return v >= 100 ? v.toFixed(0) : v.toPrecision(3);
 }

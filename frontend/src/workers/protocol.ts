@@ -48,3 +48,16 @@ export type MeshWorkerResponse =
   | { type: "repaired"; id: number; result: RepairedPayload }
   | { type: "detected"; id: number; result: DetectResult }
   | { type: "error"; id: number; message: string };
+
+const RESPONSE_TYPES = new Set(["progress", "analysed", "repaired", "detected", "error"]);
+
+
+
+/**
+ * check an unknown message is a worker response
+ */
+export function isMeshWorkerResponse(data: unknown): data is MeshWorkerResponse {
+  if (typeof data !== "object" || data === null) return false;
+  const m = data as { type?: unknown; id?: unknown };
+  return typeof m.type === "string" && RESPONSE_TYPES.has(m.type) && typeof m.id === "number";
+}

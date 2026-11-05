@@ -5,6 +5,9 @@ import { CheckProgress } from "../components/CheckProgress";
 import { HealthCard } from "../components/HealthCard";
 import { OrientCard } from "../components/OrientCard";
 
+/**
+ * render the part step for the current phase
+ */
 export function PartStep() {
   const phase = useStore((s) => s.phase);
   if (phase === "analysing" || phase === "repairing") return <CheckProgress />;

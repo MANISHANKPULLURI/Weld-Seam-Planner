@@ -16,13 +16,22 @@ type DraftPoint = { point: [number, number, number]; normal: [number, number, nu
 
 const CLICK_SLOP_PX = 4;
 
+/**
+ * measure the hand-drawn draft points as a seam path
+ */
 function draftPath(all: DraftPoint[]) {
-  // A double-click to finish lands two clicks on the same spot; drop repeated points.
+  
   const points = all.filter((p, i) => i === 0 || p.point.some((v, k) => v !== all[i - 1]!.point[k]));
+  /**
+   * flatten draft points or normals into one array
+   */
   const flat = (key: "point" | "normal") => new Float32Array(points.flatMap((p) => p[key]));
   return measure({ points: flat("point"), normalsA: flat("normal"), normalsB: flat("normal"), closed: false, length: 0 });
 }
 
+/**
+ * measure the length along a path to a picked point
+ */
 function distanceAlong(path: { points: Float32Array }, segment: number, t: number) {
   const p = path.points, n = p.length / 3;
   let d = 0;
@@ -31,7 +40,10 @@ function distanceAlong(path: { points: Float32Array }, segment: number, t: numbe
   return d + t * Math.hypot(p[j * 3]! - p[segment * 3]!, p[j * 3 + 1]! - p[segment * 3 + 1]!, p[j * 3 + 2]! - p[segment * 3 + 2]!);
 }
 
-// Box around some seams, padded so the surroundings show; part (file) coordinates.
+
+/**
+ * measure a padded box around seams for the camera
+ */
 function seamsBox(list: { points: Float32Array }[], diag: number) {
   const min: [number, number, number] = [Infinity, Infinity, Infinity], max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
   for (const x of list) for (let i = 0; i < x.points.length; i++) { const k = i % 3, v = x.points[i]!; if (v < min[k]!) min[k] = v; if (v > max[k]!) max[k] = v; }
@@ -39,10 +51,16 @@ function seamsBox(list: { points: Float32Array }[], diag: number) {
   return { min: min.map((v) => v - pad) as [number, number, number], max: max.map((v) => v + pad) as [number, number, number] };
 }
 
+/**
+ * check whether the user is typing in a field
+ */
 function isTyping(target: EventTarget | null) {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
 }
 
+/**
+ * render the 3d viewport and its seam tools
+ */
 export default function Viewport() {
   const hostRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<SceneController | null>(null);
@@ -74,7 +92,7 @@ export default function Viewport() {
   const candidateFilter = useStore((s) => s.candidateFilter);
   const workArea = useStore((s) => s.workArea);
 
-  // Seams step: all tools. Procedures step: click to select a seam only.
+  
   const seamTools = step !== "part";
   const activeTool = step === "seams" ? tool : "select";
 
@@ -99,7 +117,7 @@ export default function Viewport() {
 
   const sequence = useStore((s) => s.sequence);
 
-  // Sequence and Review show the welding order on the part.
+  
   useEffect(() => {
     const c = ctrlRef.current;
     if (!c) return;
@@ -110,7 +128,7 @@ export default function Viewport() {
   const pendingAction = useStore((s) => s.pendingAction);
   const splitCuts = useStore((s) => s.splitCuts);
 
-  // Opening Split zooms to the seam so the preview is easy to see.
+  
   useEffect(() => {
     if (pendingAction !== "split") return;
     const s = useStore.getState();
@@ -119,7 +137,7 @@ export default function Viewport() {
     if (seam && size) { const box = seamsBox([seam], Math.hypot(size.x, size.y, size.z)); ctrlRef.current?.fitBox(box.min, box.max); }
   }, [pendingAction]);
 
-  // Live split preview from the cut positions (mm from the start).
+  
   useEffect(() => {
     const c = ctrlRef.current;
     if (!c) return;
@@ -145,7 +163,7 @@ export default function Viewport() {
 
   const focus = useStore((s) => s.focus);
 
-  // Hidden bodies are dropped; in focus mode the focused bodies stay solid and the rest is a ghost.
+  
   useEffect(() => {
     const c = ctrlRef.current;
     if (!c || !mesh) return;
@@ -178,14 +196,14 @@ export default function Viewport() {
   useEffect(() => {
     if (!undo) { setUndoVisible(false); return; }
     setUndoVisible(true);
-    // Pulse what just changed: new seams (split pieces, merge result) or the reversed seam.
+    
     const before = new Set(undo.state.seams.map((x) => x.id));
     const now = useStore.getState();
     const changed = now.seams.filter((x) => x.status === "accepted" && !before.has(x.id)).map((x) => x.id);
     const ids = changed.length ? changed : now.selectedSeamId ? [now.selectedSeamId] : [];
     const list = now.seams.filter((x) => ids.includes(x.id));
     const size = now.health?.bounds.size;
-    // Zoom to what changed so a small seam's edit is visible, then pulse and label it.
+    
     if (list.length && size && !undo.label.startsWith("Deleted")) {
       const box = seamsBox(list, Math.hypot(size.x, size.y, size.z));
       ctrlRef.current?.fitBox(box.min, box.max);
@@ -231,7 +249,10 @@ export default function Viewport() {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  // Draw snaps to seam ends first, so a drawn seam joins existing ones end to end.
+  
+  /**
+   * collect seam ends and edges for cursor snapping
+   */
   function snapTargets() {
     const s = useStore.getState();
     const ends: [number, number, number][] = [];
@@ -243,6 +264,9 @@ export default function Viewport() {
     return { ends, edges: s.featureChains };
   }
 
+  /**
+   * save the drawn points as a seam and clear the draft
+   */
   function finishDraft() {
     if (draft.length >= 2) {
       const id = useStore.getState().addSeam(draftPath(draft), "drawn");
@@ -267,7 +291,6 @@ export default function Viewport() {
         return;
       }
       if (e.key === "?") { e.preventDefault(); setShowHelp((v) => !v); return; }
-      // Global camera/step shortcuts work in every tool, including Draw.
       if (["1", "2", "3", "4", "5"].includes(e.key)) {
         e.preventDefault();
         (["part", "seams", "procedures", "sequence", "review"] as const)[Number(e.key) - 1] && s.setStep((["part", "seams", "procedures", "sequence", "review"] as const)[Number(e.key) - 1]!);
@@ -306,6 +329,9 @@ export default function Viewport() {
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const moveFrame = useRef(0);
 
+  /**
+   * update hover, previews and snap markers for the tool
+   */
   function onPointerMove(e: React.PointerEvent) {
     if (!seamTools || !ctrlRef.current) return;
     const { clientX, clientY } = e;
@@ -316,7 +342,6 @@ export default function Viewport() {
       const s = useStore.getState();
       const selected = s.pendingAction === "split" ? s.seams.find((x) => x.id === s.selectedSeamId) : undefined;
       if (activeTool === "select" && selected) {
-        // One cut follows the cursor along the seam; equal parts ignore the cursor.
         if ((s.splitCuts?.length ?? 0) <= 1) {
           const hit = c.pickPath([selected], { clientX, clientY }, 24);
           if (hit) s.setSplitCuts([Math.round(distanceAlong(selected, hit.segment, hit.t) * MM_PER_UNIT[s.frame.units] * 10) / 10]);
@@ -336,6 +361,9 @@ export default function Viewport() {
     });
   }
 
+  /**
+   * apply the active tool at the click point
+   */
   function onPointerUp(e: React.PointerEvent) {
     const start = pointerDown.current;
     pointerDown.current = null;

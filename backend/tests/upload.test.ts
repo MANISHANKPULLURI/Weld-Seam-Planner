@@ -8,12 +8,18 @@ import { CHUNK_BYTES, UPLOAD_DIR, sweepExpiredUploads } from "../src/controllers
 import { OUTWARD_CUBE, binaryStl } from "../../packages/core/tests/fixtures.ts";
 
 
+/**
+ * start a test chunked upload session
+ */
 async function init(fileSize: number) {
   const res = await app.request("/api/v1/mesh/upload/init", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fileSize }) });
   return { res, json: await res.json() as { uploadId: string; chunkSize: number } };
 }
 
 
+/**
+ * post a test chunk for an upload
+ */
 function chunk(id: string, index: string, body: ArrayBuffer | Uint8Array) {
   return app.request(`/api/v1/mesh/upload/${id}/chunk?index=${index}`, { method: "POST", body });
 }

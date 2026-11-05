@@ -3,11 +3,14 @@ import { EXAMPLE_PROCEDURES, airTravel, compileWeldJob, defaultWeld, measure, pl
 import type { JobInput } from "../src/index.ts";
 
 type P = [number, number, number];
+/**
+ * build a straight measured seam between two points with normals
+ */
 const line = (a: P, b: P, nA: P = [0, 0, 1], nB: P = [1, 0, 0]) => measure({ points: new Float32Array([...a, ...b]), normalsA: new Float32Array([...nA, ...nA]), normalsB: new Float32Array([...nB, ...nB]), closed: false, length: 0 });
 
 describe("sequence planning", () => {
   test("orders and flips seams to cut air travel", () => {
-    // Three parallel seams; zig-zag (flipping every other one) is shortest.
+    
     const seams = [0, 20, 10].map((x) => ({ start: [x, 0, 0] as P, end: [x, 100, 0] as P, closed: false }));
     const naive = airTravel(seams, [0, 1, 2], [false, false, false]);
     const plan = planOrder(seams);
@@ -31,12 +34,15 @@ describe("torch frame", () => {
     const f = torchFrame([0, 1, 0], [0, 0, 1], [1, 0, 0], 0, 0);
     expect(f.axis.map((v) => Math.round(v * 1000) / 1000)).toEqual([-0.707, 0, -0.707]);
     const pushed = torchFrame([0, 1, 0], [0, 0, 1], [1, 0, 0], 0, 15);
-    expect(pushed.axis[1]).toBeGreaterThan(0.2); // leans to point forward along travel
+    expect(pushed.axis[1]).toBeGreaterThan(0.2); 
   });
 });
 
 describe("weld job", () => {
   const procedure = EXAMPLE_PROCEDURES[0]!;
+/**
+ * build a standard two-seam job input for tests
+ */
   const input = (): JobInput => ({
     meta: { name: "Test", notes: "", status: "draft", createdAt: "2026-11-04T10:00:00.000Z", id: "job_test" },
     part: { filename: "t.stl", sha256: "a".repeat(64), triangles: 12, min: [0, 0, 0], max: [100, 200, 60], repaired: false },
@@ -56,7 +62,7 @@ describe("weld job", () => {
     expect(job.seams.map((s) => s.sequence)).toEqual([1, 2]);
     expect(job.seams[0]!.geometry.waypoints.length).toBe(5);
     expect(job.totals.arc_time_s).toBeCloseTo(60, 1);
-    expect(job.totals.air_travel_mm).toBeCloseTo(10 + 80, 1); // 10 between + 2 × (20 approach + 20 retract)
+    expect(job.totals.air_travel_mm).toBeCloseTo(10 + 80, 1); 
     expect(job.totals.wait_time_s).toBe(5);
     expect(job.validation.errors).toEqual([]);
   });

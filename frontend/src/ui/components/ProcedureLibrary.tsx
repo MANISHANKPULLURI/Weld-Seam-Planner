@@ -10,11 +10,16 @@ const PROCESSES: Procedure["process"][] = [
   { kind: "gmaw", iso_4063: 135 }, { kind: "gmaw", iso_4063: 131 }, { kind: "fcaw", iso_4063: 136 }, { kind: "gtaw", iso_4063: 141 },
 ];
 
+/**
+ * summarize a procedure as process, current and speed
+ */
 export function procedureSummary(p: Procedure) {
   return `${PROCESS_LABEL[p.process.iso_4063]} · ${p.electrical.current_a} A · ${p.electrical.voltage_v} V · ${p.motion.travel_speed_mm_min} mm/min`;
 }
 
-// The library of procedures. One is "active": that is what Apply in the seam list assigns.
+/**
+ * edit the procedure library and pick the active one
+ */
 export function ProcedureLibrary({ activeId, onActive }: { activeId: string; onActive: (id: string) => void }) {
   const procedures = useStore((s) => s.procedures);
   const seams = useStore((s) => s.seams);
@@ -43,7 +48,7 @@ export function ProcedureLibrary({ activeId, onActive }: { activeId: string; onA
               </button>
               <span className="proc-actions">
                 <button type="button" className="btn-link" onClick={() => setEditing(editing === p.id ? null : p.id)}>{editing === p.id ? "Done" : "Edit"}</button>
-                <button type="button" className="btn-link" onClick={() => { const id = duplicateProcedure(p.id); onActive(id); setEditing(id); }}>Copy</button>
+                <button type="button" className="btn-link" onClick={() => { const id = duplicateProcedure(p.id); if (useStore.getState().procedures.some((x) => x.id === id)) { onActive(id); setEditing(id); } else setError(id); }}>Copy</button>
                 <button type="button" className="btn-link btn-danger" onClick={() => setError(deleteProcedure(p.id))}>Delete</button>
               </span>
               {editing === p.id && <ProcedureForm procedure={p} onChange={saveProcedure} />}
@@ -57,9 +62,18 @@ export function ProcedureLibrary({ activeId, onActive }: { activeId: string; onA
   );
 }
 
+/**
+ * edit every field of one welding procedure
+ */
 function ProcedureForm({ procedure: p, onChange }: { procedure: Procedure; onChange: (p: Procedure) => void }) {
+  /**
+   * patch the procedure being edited
+   */
   const set = (patch: Partial<Procedure>) => onChange({ ...p, ...patch });
-  const num = (v: number | null, fallback: number) => (v === null || v <= 0 ? fallback : v);
+  /**
+   * use a numeric input or its fallback default
+   */
+  const num = (v: number | null, fallback: number) => (v === null || !(v >= 0) ? fallback : v);
   const hi = p.limits.heat_input_kj_mm;
 
   return (

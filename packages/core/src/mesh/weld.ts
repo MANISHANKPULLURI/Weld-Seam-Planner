@@ -9,12 +9,18 @@ export type WeldResult = {
   duplicateRemoved: number;
 };
 
+/**
+ * derive default weld tolerance from a mesh diagonal
+ */
 export function defaultWeldTolerance(diagonal: number): number {
   return Math.max(diagonal * 1e-6, 1e-9);
 }
 
-// Cells are twice the tolerance, so any neighbour within tolerance lies in the vertex's own
-// cell or the adjacent cell on the nearer side of each axis: 8 cells to search, not 27.
+
+
+/**
+ * merge duplicate vertices and drop degenerate and duplicate triangles
+ */
 export function weldVertices(positions: Float32Array, tolerance?: number, onProgress: (f: number) => void = () => {}, normals: Float32Array | null = null): WeldResult {
 
   const rawCount = positions.length / 3;
@@ -139,6 +145,9 @@ export function weldVertices(positions: Float32Array, tolerance?: number, onProg
 }
 
 
+/**
+ * compute squared area of a triangle for degeneracy testing
+ */
 function areaSq(v: Float32Array, a: number, b: number, c: number): number {
   const ax = v[b * 3]! - v[a * 3]!, ay = v[b * 3 + 1]! - v[a * 3 + 1]!, az = v[b * 3 + 2]! - v[a * 3 + 2]!;
   const bx = v[c * 3]! - v[a * 3]!, by = v[c * 3 + 1]! - v[a * 3 + 1]!, bz = v[c * 3 + 2]! - v[a * 3 + 2]!;
@@ -146,10 +155,16 @@ function areaSq(v: Float32Array, a: number, b: number, c: number): number {
   return nx * nx + ny * ny + nz * nz;
 }
 
+/**
+ * hash integer cell coordinates for the weld lookup table
+ */
 function hashCell(x: number, y: number, z: number): number {
   return (Math.imul(x | 0, 73856093) ^ Math.imul(y | 0, 19349663) ^ Math.imul(z | 0, 83492791)) >>> 0;
 }
 
+/**
+ * round up to the next power of two for hash table sizing
+ */
 function nextPow2(n: number): number {
   let p = 1;
   while (p < n) p <<= 1;

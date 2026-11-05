@@ -94,13 +94,13 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
   .part-pill-float .part-chip { max-width: 100%; }
 }
 @media (max-width: 1100px) {
-  /* Collapse to status dot + name only so Fit/Reset and view toggles never collide */
+  
   .part-pill-float { max-width: 180px; }
   .part-pill-float .part-chip-meta { display: none; }
   .part-pill-float .part-chip { padding: 4px 10px; }
 }
 @media (max-width: 760px) {
-  /* Dock below the top chrome instead of squeezing between controls */
+  
   .part-pill-float { top: auto; bottom: 64px; left: 8px; transform: none; max-width: 60vw; }
   .part-pill-float .part-chip-meta { display: none; }
 }
@@ -112,8 +112,7 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
   display: flex;
 }
 .save-status-float .save-status { font-size: 11px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px 8px; }
-/* Checkpoint twin-bar in the topbar (same language as Persp/Ortho).
-   Reset menu drops below the bar with a slow ease-out settle. */
+
 .edge-toolbar {
   position: relative;
   display: flex;
@@ -121,7 +120,7 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
 }
 .edge-strip { display: none; }
 .edge-bar button { min-width: 34px; justify-content: center; }
-/* Reset slide-out: anchored under the topbar control, opens downward */
+
 .edge-menu {
   position: absolute;
   right: 0;
@@ -148,7 +147,7 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
   transition: max-width 200ms, opacity 150ms;
 }
 .edge-panel .local-chip:hover .local-chip-text, .edge-toolbar:hover .local-chip-text { max-width: 140px; opacity: 1; }
-/* Topbar lock is gone; keep chip compact everywhere by default */
+
 .local-chip .local-chip-text {
   max-width: 0;
   opacity: 0;

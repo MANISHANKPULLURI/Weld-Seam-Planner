@@ -8,6 +8,9 @@ import { StepNav } from "../components/StepNav";
 import { CandidateReview } from "../components/CandidateReview";
 import { useStore } from "../../state/store";
 
+/**
+ * find and keep seams, or review them
+ */
 export function SeamsStep() {
   const kept = useStore((s) => s.seams.filter((x) => x.status === "accepted").length);
   const reviewing = useStore((s) => s.reviewing);

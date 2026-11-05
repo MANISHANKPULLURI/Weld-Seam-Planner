@@ -7,9 +7,9 @@ import { chainSegments, dot, len, normalize, sub } from "./chain.ts";
 import type { Segment } from "./chain.ts";
 import type { DetectOptions, DetectRegion, DetectResult, JointType, SeamCandidate, SeamPath, SeamSource } from "./types.ts";
 
-// A fillet weld needs an opening of roughly 60-135° between the plates, i.e. a bend of 45-120°
-// between their faces (AWS D1.1 / EN 1993-1-8 skewed-joint limits); shallower creases and
-// near-folds are not weldable corners.
+
+
+
 export const DEFAULT_DETECT_OPTIONS: DetectOptions = { featureAngleDeg: 45, minLength: 5, contactTolerance: 0.05, includeOutside: false };
 
 const EDGE_CHAIN_MIN_DEG = 20;
@@ -18,7 +18,10 @@ const BAND_MAX_DEG = 60;
 
 type Crease = { h: number; f: number; g: number; angle: number; concave: boolean };
 
-// Mesh must be oriented outward (orientedIndices from analyseMesh) so concave and convex are meaningful.
+
+/**
+ * detect weld seam candidates and feature chains from mesh triangles
+ */
 export function detectSeams(vertices: Float32Array, indices: Uint32Array, bodyOfTriangle: Uint32Array, options: DetectOptions = DEFAULT_DETECT_OPTIONS): DetectResult {
 
   const faceCount = indices.length / 3;
@@ -79,11 +82,14 @@ export function detectSeams(vertices: Float32Array, indices: Uint32Array, bodyOf
   const keep = options.region?.keep;
   const inRegion = keep ? clipCandidates(candidates, keep, options) : candidates;
 
-  // Feature chains stay complete so Pick edge works everywhere once the section is closed.
+  
   return { candidates: dedupe(inRegion, Math.max(options.contactTolerance, tolerance) * 2), featureChains: chainSegments(features, tolerance) };
 }
 
 
+/**
+ * count distinct bodies referenced by per-triangle body labels
+ */
 function bodyCount(bodyOfTriangle: Uint32Array): number {
   let count = 0;
   for (const b of bodyOfTriangle) if (b + 1 > count) count = b + 1;
@@ -91,8 +97,11 @@ function bodyCount(bodyOfTriangle: Uint32Array): number {
 }
 
 
-// Trims each candidate to the kept side of the plane, splitting it where it crosses.
-// Untouched candidates keep their id; trimmed pieces get a new one from their new geometry.
+
+
+/**
+ * clip seam candidates to the kept half-space of a section region
+ */
 function clipCandidates(candidates: SeamCandidate[], keep: NonNullable<DetectRegion["keep"]>, options: DetectOptions): SeamCandidate[] {
 
   const out: SeamCandidate[] = [];
@@ -106,7 +115,7 @@ function clipCandidates(candidates: SeamCandidate[], keep: NonNullable<DetectReg
     if (d.every((x) => x >= 0)) { out.push(c); continue; }
     if (d.every((x) => x < 0)) continue;
 
-    // Walk from an outside point so closed loops split cleanly.
+    
     const start = c.closed ? d.findIndex((x) => x < 0) : 0;
     const steps = c.closed ? n : n - 1;
     const pieces: number[][][] = [];
@@ -147,6 +156,9 @@ function clipCandidates(candidates: SeamCandidate[], keep: NonNullable<DetectReg
 }
 
 
+/**
+ * compute per-face unit normals for all triangles
+ */
 function faceNormals(vertices: Float32Array, indices: Uint32Array): Float64Array {
 
   const out = new Float64Array(indices.length);
@@ -169,12 +181,18 @@ const dotAt = (normals: Float64Array, f: number, g: number) => normals[f * 3]! *
 const vertexAt = (vertices: Float32Array, v: number): [number, number, number] => [vertices[v * 3]!, vertices[v * 3 + 1]!, vertices[v * 3 + 2]!];
 
 
+/**
+ * compute centroid of a triangle face
+ */
 function centroidOf(vertices: Float32Array, indices: Uint32Array, face: number): [number, number, number] {
   const a = vertexAt(vertices, indices[face * 3]!), b = vertexAt(vertices, indices[face * 3 + 1]!), c = vertexAt(vertices, indices[face * 3 + 2]!);
   return [(a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3];
 }
 
-// Concave when each face's centroid sits in front of the other face.
+
+/**
+ * test whether the dihedral edge between two faces is concave
+ */
 function isConcave(vertices: Float32Array, indices: Uint32Array, normals: Float64Array, f: number, g: number): boolean {
 
   const cf = centroidOf(vertices, indices, f), cg = centroidOf(vertices, indices, g);
@@ -182,8 +200,11 @@ function isConcave(vertices: Float32Array, indices: Uint32Array, normals: Float6
 }
 
 
-// A rounded edge or a faceted hole shows up as a band of parallel, shallow creases bending the same way.
-// A real joint is one sharp crease between larger faces.
+
+
+/**
+ * detect whether a crease belongs to a parallel rounded band
+ */
 function isBanded(c: Crease, creases: Crease[], creaseOfHalfEdge: Int32Array, vertices: Float32Array, indices: Uint32Array, twin: Int32Array, normals: Float64Array): boolean {
 
   if (c.angle > BAND_MAX_DEG) return false;
@@ -211,10 +232,16 @@ function isBanded(c: Crease, creases: Crease[], creaseOfHalfEdge: Int32Array, ve
   return false;
 }
 
+/**
+ * compute unit direction vector of a half-edge
+ */
 function edgeDirection(vertices: Float32Array, indices: Uint32Array, h: number) {
   return normalize(sub(vertexAt(vertices, halfEdgeEnd(indices, h)), vertexAt(vertices, indices[h]!)));
 }
 
+/**
+ * build a seam segment from a crease edge and its face normals
+ */
 function edgeSegment(vertices: Float32Array, indices: Uint32Array, normals: Float64Array, c: Crease): Segment {
   return { a: vertexAt(vertices, indices[c.h]!), b: vertexAt(vertices, halfEdgeEnd(indices, c.h)), normalA: normalOf(normals, c.f), normalB: normalOf(normals, c.g) };
 }
@@ -222,6 +249,9 @@ function edgeSegment(vertices: Float32Array, indices: Uint32Array, normals: Floa
 
 type Body = { faces: Uint32Array; bvh: MeshBVH; box: Box3 };
 
+/**
+ * split mesh triangles by body label into bvh-backed volumes
+ */
 function splitBodies(vertices: Float32Array, indices: Uint32Array, bodyOfTriangle: Uint32Array): Body[] {
 
   let count = 0;
@@ -246,7 +276,10 @@ function splitBodies(vertices: Float32Array, indices: Uint32Array, bodyOfTriangl
 }
 
 
-// Sharp convex edges of one body that lie on another body's surface: a plate edge standing on a plate.
+
+/**
+ * find contact segments where one body edge rests on another body
+ */
 function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: Float64Array, bodyOfTriangle: Uint32Array, bodies: Body[], creases: Crease[], tolerance: number, hidden: Uint8Array): { joint: JointType; segments: Segment[] }[] {
 
   const groups: Record<"fillet" | "butt" | "corner", Segment[]> = { fillet: [], butt: [], corner: [] };
@@ -278,8 +311,8 @@ function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: 
 
       if (!touching) continue;
 
-      // On an edge the closest face is ambiguous, so probe just inside each face of this edge:
-      // the face resting on the other body is the contact face, the other one is free.
+      
+      
       const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
       const probe = (face: number) => {
         const toward = sub(centroidOf(vertices, indices, face), mid);
@@ -307,15 +340,21 @@ function contactSegments(vertices: Float32Array, indices: Uint32Array, normals: 
 }
 
 
-// three-mesh-bvh can return a point beyond maxThreshold (it only prunes by box distance), which made
-// rotated parts report edges 6 mm away as touching. Check the distance ourselves.
+
+
+/**
+ * test whether a point lies within tolerance of a body surface
+ */
 function within(body: Body, point: Vector3, hit: HitPointInfo, tolerance: number): boolean {
   return body.bvh.closestPointToPoint(point, hit, 0, tolerance) !== null && hit.distance <= tolerance;
 }
 
 
-// Where one body passes through another, e.g. a tube through a plate. Triangles that only touch
-// (one lies on the other's plane) are contacts, found above, not intersections.
+
+
+/**
+ * find intersection segments where two body volumes cross
+ */
 function intersectionSegments(bodies: Body[], normals: Float64Array, tolerance: number, hidden: Uint8Array): Segment[] {
 
   const segments: Segment[] = [];
@@ -346,8 +385,11 @@ function intersectionSegments(bodies: Body[], normals: Float64Array, tolerance: 
 }
 
 
-// True when the triangle has corners clearly on both sides of the other triangle's plane.
+
 const straddlePlane = new Plane();
+/**
+ * test whether a triangle straddles another triangle plane
+ */
 function straddles(tri: Triangle, other: Triangle, tolerance: number): boolean {
   other.getPlane(straddlePlane);
   const d = [tri.a, tri.b, tri.c].map((p) => straddlePlane.distanceToPoint(p));
@@ -364,6 +406,9 @@ const REASON: Record<SeamSource, string> = {
   drawn: "Drawn by hand",
 };
 
+/**
+ * convert chained paths into scored seam candidates with stable ids
+ */
 function toCandidates(paths: SeamPath[], source: SeamSource, jointType: JointType, options: DetectOptions): SeamCandidate[] {
 
   return paths.filter((p) => p.length >= options.minLength).map((p) => {
@@ -378,14 +423,20 @@ function toCandidates(paths: SeamPath[], source: SeamSource, jointType: JointTyp
   });
 }
 
+/**
+ * compute dihedral bend angle in degrees from path face normals
+ */
 function bendAngle(p: SeamPath): number {
   const n = dot([p.normalsA[0]!, p.normalsA[1]!, p.normalsA[2]!], [p.normalsB[0]!, p.normalsB[1]!, p.normalsB[2]!]);
   return (Math.acos(Math.max(-1, Math.min(1, n))) * 180) / Math.PI;
 }
 
 
-// Stable across re-runs and reversal: built from the rounded, sorted end points (or centroid for
-// loops), the length and the midpoint.
+/**
+ * Stable across re-runs and reversal: built from the rounded, sorted end points (or centroid for
+ * loops), the length and the midpoint.
+ * build a stable seam id from rounded endpoints, length and midpoint
+ */
 export function seamId(source: SeamSource, p: SeamPath): string {
 
   const r = (v: number) => Math.round(v * 100) / 100;
@@ -410,7 +461,10 @@ export function seamId(source: SeamSource, p: SeamPath): string {
 }
 
 
-// The same line found by two methods (e.g. contact and intersection) keeps the more confident one.
+/**
+ * The same line found by two methods (e.g. contact and intersection) keeps the more confident one.
+ * remove duplicate candidates covering the same line, keeping confident ones
+ */
 function dedupe(candidates: SeamCandidate[], distance: number): SeamCandidate[] {
 
   const sorted = [...candidates].sort((a, b) => b.confidence - a.confidence);
@@ -427,11 +481,17 @@ function dedupe(candidates: SeamCandidate[], distance: number): SeamCandidate[] 
   return candidates.filter((c) => kept.includes(c));
 }
 
-// The same line, e.g. a picked edge that a detected candidate also follows.
+/**
+ * The same line, e.g. a picked edge that a detected candidate also follows.
+ * test whether two paths follow each other within tolerance both ways
+ */
 export function samePath(a: SeamPath, b: SeamPath, distance: number): boolean {
   return Math.abs(a.length - b.length) <= 0.15 * Math.max(a.length, b.length) && lies(a, b, distance) && lies(b, a, distance);
 }
 
+/**
+ * test whether every point of one path lies near another path
+ */
 function lies(a: SeamPath, on: SeamPath, distance: number): boolean {
   for (let i = 0; i < a.points.length; i += 3) {
     if (distanceToPolyline([a.points[i]!, a.points[i + 1]!, a.points[i + 2]!], on) > distance) return false;
@@ -439,6 +499,9 @@ function lies(a: SeamPath, on: SeamPath, distance: number): boolean {
   return true;
 }
 
+/**
+ * compute shortest distance from a point to a seam polyline
+ */
 export function distanceToPolyline(p: number[], path: SeamPath): number {
 
   const count = path.points.length / 3;

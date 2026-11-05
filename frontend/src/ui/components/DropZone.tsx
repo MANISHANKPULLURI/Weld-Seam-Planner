@@ -5,11 +5,17 @@ import { createSampleStl } from "../../domain/mesh/sample";
 
 const MAX_FILE_MB = 300;
 
+/**
+ * render the STL file drop zone
+ */
 export function DropZone() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * validate a chosen file and start analysing it
+   */
   function load(file: File) {
     if (!file.name.toLowerCase().endsWith(".stl")) { setError("Choose an .stl file."); return; }
     if (file.size === 0) { setError("This file is empty."); return; }
@@ -18,6 +24,9 @@ export function DropZone() {
     analyseFile(file, file.name);
   }
 
+  /**
+   * analyse the file dropped onto the zone
+   */
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
@@ -25,6 +34,9 @@ export function DropZone() {
     if (f) load(f);
   }
 
+  /**
+   * analyse the file chosen in the file picker
+   */
   function onBrowse(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (f) load(f);

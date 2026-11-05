@@ -4,10 +4,14 @@ import { seamCalc, useStore } from "../../state/store";
 import type { SeamWeld } from "../../state/store";
 import { NumberField } from "./NumberField";
 import { focusForSeam } from "../../lib/focus";
-import { POSITION_LABEL, formatTime } from "./WeldSeamList";
+import { POSITION_LABEL } from "../labels";
+import { formatTime } from "./WeldSeamList";
 
 const POSITIONS: Iso6947[] = ["PA", "PB", "PC", "PD", "PE", "PF", "PG"];
 
+/**
+ * edit the selected seam's weld settings
+ */
 export function WeldInspector() {
   const seam = useStore((s) => s.seams.find((x) => x.id === s.selectedSeamId && x.status === "accepted"));
   const procedures = useStore((s) => s.procedures);
@@ -20,7 +24,13 @@ export function WeldInspector() {
 
   const w = seam.weld;
   const c = seamCalc(seam, procedures, frame.units, frame.upAxis);
+  /**
+   * patch the selected seam's weld settings
+   */
   const update = (patch: Partial<SeamWeld>) => updateWeld([seam.id], patch);
+  /**
+   * set or clear one per-seam weld value
+   */
   const override = (key: keyof SeamWeld["overrides"], v: number | null) => {
     const next = { ...w!.overrides };
     if (v === null) delete next[key]; else next[key] = v;
@@ -69,8 +79,8 @@ export function WeldInspector() {
                   <option value="z">z, leg</option>
                 </select>
               </label>
-              <NumberField label="Size" unit="mm" step={0.5} value={w.size.value_mm} onChange={(v) => v && update({ size: { ...w.size, value_mm: v } })} />
-              <NumberField label="Passes" step={1} min={1} value={w.passes} onChange={(v) => v && update({ passes: Math.round(v) })} />
+              <NumberField label="Size" unit="mm" step={0.5} value={w.size.value_mm} onChange={(v) => { if (v != null) update({ size: { ...w.size, value_mm: v } }); }} />
+              <NumberField label="Passes" step={1} min={1} value={w.passes} onChange={(v) => { if (v != null) update({ passes: Math.round(v) }); }} />
             </div>
             <p className="field-hint">Throat a {c.throat.toFixed(1)} mm, leg z {c.leg.toFixed(1)} mm (a = z × cos(opening/2), 0.707 at 90°).</p>
             <label className="field field-check">
@@ -79,8 +89,8 @@ export function WeldInspector() {
             </label>
             {w.intermittent && (
               <div className="field-grid">
-                <NumberField label="Stitch length" unit="mm" value={w.intermittent.weld_length_mm} onChange={(v) => v && update({ intermittent: { ...w.intermittent!, weld_length_mm: v } })} />
-                <NumberField label="Pitch" unit="mm" hint="Start of one stitch to the start of the next." value={w.intermittent.pitch_mm} onChange={(v) => v && update({ intermittent: { ...w.intermittent!, pitch_mm: v } })} />
+                <NumberField label="Stitch length" unit="mm" value={w.intermittent.weld_length_mm} onChange={(v) => { if (v != null) update({ intermittent: { ...w.intermittent!, weld_length_mm: v } }); }} />
+                <NumberField label="Pitch" unit="mm" hint="Start of one stitch to the start of the next." value={w.intermittent.pitch_mm} onChange={(v) => { if (v != null) update({ intermittent: { ...w.intermittent!, pitch_mm: v } }); }} />
               </div>
             )}
           </details>

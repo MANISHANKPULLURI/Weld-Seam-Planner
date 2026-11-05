@@ -6,16 +6,22 @@ const dist = (a: P, b: P) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const exitOf = (s: Ends, rev: boolean) => (s.closed ? s.start : rev ? s.start : s.end);
 const entryOf = (s: Ends, rev: boolean) => (s.closed ? s.start : rev ? s.end : s.start);
 
-// Straight-line air travel from one seam's end to the next one's start.
+
+/**
+ * sum straight-line air travel between ordered seam endpoints
+ */
 export function airTravel(seams: Ends[], order: number[], reversed: boolean[]): number {
   let total = 0;
   for (let i = 1; i < order.length; i++) total += dist(exitOf(seams[order[i - 1]!]!, reversed[order[i - 1]!]!), entryOf(seams[order[i]!]!, reversed[order[i]!]!));
   return total;
 }
 
-// Orders seams to cut air travel, choosing each seam's direction too: nearest neighbour from the
-// first seam, then 2-opt (reverse a run of the tour, which also flips each seam in it) until no
-// improvement. A travelling-salesman heuristic; good, not guaranteed optimal.
+
+
+
+/**
+ * order seams greedily then improve the tour with 2-opt reversals
+ */
 export function planOrder(seams: Ends[], options: { keepDirection?: boolean; maxPasses?: number } = {}): Plan {
   const n = seams.length;
   const reversed = new Array<boolean>(n).fill(false);
@@ -36,10 +42,10 @@ export function planOrder(seams: Ends[], options: { keepDirection?: boolean; max
     order.push(best); used.add(best); reversed[best] = bestRev;
   }
 
-  // Reversing order[i..k] (and flipping those seams) only changes the two edges at its ends:
-  // inside the run every edge is the same distance travelled backwards.
+  
+  
   if (!options.keepDirection && n > 2) {
-    // A flipped seam enters where it used to exit, so the new boundary points are the old ones swapped.
+    
     const exitAt = (pos: number) => exitOf(seams[order[pos]!]!, reversed[order[pos]!]!);
     const entryAt = (pos: number) => entryOf(seams[order[pos]!]!, reversed[order[pos]!]!);
     let improved = true, passes = 0;

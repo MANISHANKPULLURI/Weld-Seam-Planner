@@ -11,7 +11,7 @@ describe("weld calculations", () => {
   test("arc time covers passes and only the welded part of stitches", () => {
     expect(arcTimeS(200, 400)).toBeCloseTo(30, 6);
     expect(arcTimeS(200, 400, 2)).toBeCloseTo(60, 6);
-    // 50 mm stitches every 150 mm on 400 mm: at 0, 150, 300 = 3 stitches = 150 mm welded.
+    
     expect(weldedLengthMm(400, { weld_length_mm: 50, pitch_mm: 150 })).toBe(150);
     expect(weldedLengthMm(30, { weld_length_mm: 50, pitch_mm: 150 })).toBe(30);
   });

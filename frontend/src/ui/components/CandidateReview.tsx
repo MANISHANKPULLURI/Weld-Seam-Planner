@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { candidateVisible, inWorkArea, seamLengthMm, useStore } from "../../state/store";
-import { JOINT_HELP } from "./SeamList";
+import { JOINT_HELP } from "../labels";
 
-// Walks through the suggestions one at a time: the camera frames each, the user keeps or drops it.
-// The list is frozen when the review starts, so keeping or dropping doesn't shift what comes next.
+
+
+/**
+ * review detected seams one by one
+ */
 export function CandidateReview({ onClose }: { onClose: () => void }) {
   const units = useStore((s) => s.frame.units);
   const seams = useStore((s) => s.seams);
@@ -19,7 +22,7 @@ export function CandidateReview({ onClose }: { onClose: () => void }) {
   const [decisions, setDecisions] = useState<Record<string, "kept" | "dropped">>({});
 
   const id = queue[index];
-  // A dropped suggestion is gone from the store; show the copy taken at the start.
+  
   const seam = seams.find((x) => x.id === id) ?? original.find((x) => x.id === id);
   const done = index >= queue.length;
   const kept = Object.values(decisions).filter((d) => d === "kept").length;
@@ -33,6 +36,9 @@ export function CandidateReview({ onClose }: { onClose: () => void }) {
     frameSeams([id]);
   }, [id, selectSeam, frameSeams, original, restoreCandidate]);
 
+  /**
+   * keep or drop the seam under review
+   */
   const decide = (choice: "kept" | "dropped") => {
     if (!id) return;
     const current = useStore.getState().seams.find((x) => x.id === id);

@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { inWorkArea, seamCalc, useStore } from "../../state/store";
 import { PROCESS_LABEL } from "./ProcedureLibrary";
+import { POSITION_LABEL } from "../labels";
 import { seamColor } from "../../viewer/seamColors";
 
-export const POSITION_LABEL: Record<string, string> = {
-  PA: "flat", PB: "horizontal fillet", PC: "horizontal", PD: "overhead fillet", PE: "overhead", PF: "vertical up", PG: "vertical down", inclined: "inclined",
-};
-
+/**
+ * format seconds as minutes or seconds
+ */
 export function formatTime(s: number) {
   return s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${s.toFixed(1)} s`;
 }
 
+/**
+ * list accepted seams with procedures and totals
+ */
 export function WeldSeamList({ activeId }: { activeId: string }) {
   const all = useStore((s) => s.seams);
   const workArea = useStore((s) => s.workArea);
@@ -27,6 +30,9 @@ export function WeldSeamList({ activeId }: { activeId: string }) {
   const totalTime = [...calcs.values()].reduce((t, c) => t + (c?.arcTime ?? 0), 0);
   const totalLength = seams.reduce((t, x) => t + (calcs.get(x.id)?.lengthMm ?? 0), 0);
   const issues = [...calcs.values()].reduce((n, c) => n + (c?.warnings.length ?? 0), 0);
+  /**
+   * select or deselect a seam for bulk actions
+   */
   const toggle = (id: string) => setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const short = active ? PROCESS_LABEL[active.process.iso_4063] : "";
 

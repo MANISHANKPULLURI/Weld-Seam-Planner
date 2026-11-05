@@ -145,7 +145,7 @@ export const seamSchema = z.object({
 
   checks: z.object({
 
-    torch_clearance: z.enum(["ok", "blocked"]).describe("Torch clearance check"),
+    torch_clearance: z.enum(["ok", "blocked", "not_checked"]).describe("Torch clearance check"),
 
   }).describe("Checks"),
 

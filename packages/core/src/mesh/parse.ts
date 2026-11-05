@@ -7,6 +7,9 @@ export type ParseOptions = { maxTriangles?: number; onProgress?: (fraction: numb
 
 const HEAD_BYTES = 4096;
 
+/**
+ * parse an stl buffer as binary or ascii with recovery warnings
+ */
 export function parseStl(buffer: ArrayBuffer, options: ParseOptions = {}): ParsedStl {
 
   const maxTriangles = options.maxTriangles ?? MAX_TRIANGLES;
@@ -51,6 +54,9 @@ export function parseStl(buffer: ArrayBuffer, options: ParseOptions = {}): Parse
 }
 
 
+/**
+ * detect an ascii stl by its solid header and facet keywords
+ */
 function looksAscii(bytes: Uint8Array): boolean {
 
   const end = Math.min(bytes.length, HEAD_BYTES);
@@ -74,8 +80,11 @@ function looksAscii(bytes: Uint8Array): boolean {
 
 const PLAUSIBLE_COORDINATE = 1e9;
 
-// Recovery paths (padded, truncated, zero-count files) are only trusted if the coordinates look
-// like real geometry; otherwise random bytes would be read as nonsense triangles.
+/**
+ * Recovery paths (padded, truncated, zero-count files) are only trusted if the coordinates look
+ * like real geometry; otherwise random bytes would be read as nonsense triangles.
+ * parse binary stl triangles with optional recovery validation
+ */
 function parseBinary(buffer: ArrayBuffer, count: number, warnings: string[], maxTriangles: number, onProgress: (f: number) => void, recovering = false): ParsedStl {
 
   if (count > maxTriangles) {
@@ -115,10 +124,14 @@ function parseBinary(buffer: ArrayBuffer, count: number, warnings: string[], max
 }
 
 
+/**
+ * parse ascii stl vertices and normals by scanning tokens
+ */
 function parseAscii(bytes: Uint8Array, maxTriangles: number, onProgress: (f: number) => void): ParsedStl | null {
 
   const n = bytes.length;
   const maxValues = maxTriangles * 9;
+  const maxNormals = maxTriangles * 3;
 
   let values = new Float32Array(Math.max(9 * 64, Math.floor(n / 25)));
   let count = 0;
@@ -171,6 +184,9 @@ function parseAscii(bytes: Uint8Array, maxTriangles: number, onProgress: (f: num
         const value = Number(String.fromCharCode.apply(null, Array.from(bytes.subarray(start, i))));
         facetNormals.push(Number.isFinite(value) ? value : 0);
       }
+      if (facetNormals.length > maxNormals) {
+        throw new MeshError(`This part has more than ${maxTriangles.toLocaleString("en-US")} triangles. Try a simplified export.`);
+      }
       continue;
     }
 
@@ -202,6 +218,9 @@ function parseAscii(bytes: Uint8Array, maxTriangles: number, onProgress: (f: num
 }
 
 
+/**
+ * match a case-insensitive keyword at a byte offset
+ */
 function matchesWord(bytes: Uint8Array, at: number, word: string): boolean {
 
   if (at + word.length > bytes.length) return false;
@@ -214,6 +233,9 @@ function matchesWord(bytes: Uint8Array, at: number, word: string): boolean {
 }
 
 
+/**
+ * test whether a byte is ascii whitespace
+ */
 function isSpace(b: number): boolean {
   return b === 0x20 || b === 0x09 || b === 0x0a || b === 0x0d || b === 0x0b || b === 0x0c;
 }

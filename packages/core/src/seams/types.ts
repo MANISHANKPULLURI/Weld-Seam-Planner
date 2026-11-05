@@ -2,8 +2,8 @@ export type SeamSource = "inside_corner" | "outside_corner" | "contact" | "inter
 
 export type JointType = "fillet" | "butt" | "corner" | "unknown";
 
-// Geometry is in file coordinates; the confirmed units and up axis are applied on top.
-// normalsA/normalsB hold, per point, the two surfaces the seam sits between (equal for one surface).
+
+
 export type SeamPath = {
   points: Float32Array;
   normalsA: Float32Array;
@@ -21,8 +21,8 @@ export type SeamCandidate = SeamPath & {
   reason: string;
 };
 
-// Limits detection to what the user is looking at. keep is a plane in file coordinates: points with
-// normal·p + constant >= 0 are kept (the section's visible side).
+
+
 export type DetectRegion = {
   hiddenBodies?: number[];
   keep?: { normal: [number, number, number]; constant: number } | null;

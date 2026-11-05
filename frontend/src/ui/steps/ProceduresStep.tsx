@@ -5,6 +5,9 @@ import { WeldSeamList } from "../components/WeldSeamList";
 import { WeldInspector } from "../components/WeldInspector";
 import { StepNav } from "../components/StepNav";
 
+/**
+ * render the procedure assignment step
+ */
 export function ProceduresStep() {
   const procedures = useStore((s) => s.procedures);
   const [activeId, setActiveId] = useState(() => procedures[0]?.id ?? "");
@@ -22,6 +25,9 @@ export function ProceduresStep() {
   );
 }
 
+/**
+ * explain the procedures step with live counts
+ */
 function ProcGuide() {
   const seams = useStore((s) => s.seams.filter((x) => x.status === "accepted").length);
   const assigned = useStore((s) => s.seams.filter((x) => x.status === "accepted" && x.weld).length);

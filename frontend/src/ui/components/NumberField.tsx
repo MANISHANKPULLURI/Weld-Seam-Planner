@@ -11,7 +11,10 @@ type Props = {
   onReset?: () => void;
 };
 
-// Empty input means "not set" (null). overridden marks a per-seam value that differs from the procedure.
+
+/**
+ * render a labelled numeric input with reset
+ */
 export function NumberField({ label, value, onChange, unit, hint, step = 1, min = 0, placeholder, overridden, onReset }: Props) {
   return (
     <label className={`field${overridden ? " field-overridden" : ""}`} title={hint}>

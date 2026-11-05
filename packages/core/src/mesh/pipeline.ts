@@ -38,6 +38,9 @@ export type RepairedMesh = {
   stats: RepairStats;
 };
 
+/**
+ * analyse an stl buffer through parse, weld, topology and orient stages
+ */
 export function analyseMesh(buffer: ArrayBuffer, options: AnalyseOptions = {}): AnalysedMesh {
 
   const progress = options.onProgress ?? (() => {});
@@ -47,7 +50,8 @@ export function analyseMesh(buffer: ArrayBuffer, options: AnalyseOptions = {}): 
   progress("read", 1);
 
   progress("weld", 0);
-  const welded = weldVertices(parsed.positions, options.tolerance, (f) => progress("weld", f), parsed.normals);
+  const tolerance = Number.isFinite(options.tolerance) && (options.tolerance as number) > 0 ? options.tolerance : undefined;
+  const welded = weldVertices(parsed.positions, tolerance, (f) => progress("weld", f), parsed.normals);
   progress("weld", 1);
 
   progress("topology", 0);
@@ -83,8 +87,11 @@ export function analyseMesh(buffer: ArrayBuffer, options: AnalyseOptions = {}): 
   };
 }
 
-// Takes the analysed, already oriented mesh (orientedIndices). Hole fans are wound against their loop,
-// so they match their neighbours; closed shells are re-checked for inside-out volume.
+
+
+/**
+ * repair a mesh by closing holes and reorienting faces outward
+ */
 export function repairMesh(vertices: Float32Array, indices: Uint32Array, previous?: Pick<Health, "degenerateRemoved" | "duplicateRemoved" | "flippedFaces">): RepairedMesh {
 
   const vertexCount = vertices.length / 3;

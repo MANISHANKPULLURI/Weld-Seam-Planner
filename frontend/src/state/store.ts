@@ -47,7 +47,10 @@ export type JobSettings = { name: string; notes: string; status: "draft" | "appr
 
 export const DEFAULT_JOB: JobSettings = { name: "", notes: "", status: "draft", airSpeedMmS: 150, waypointSpacingMm: 5, supervision: "operator_confirm" };
 
-// Accepted seams in welding order: the saved sequence first, any newer seams after it.
+
+/**
+ * list accepted seams in weld order, then the rest
+ */
 export function orderedSeams(s: Pick<Store, "seams" | "sequence">): Seam[] {
   const accepted = s.seams.filter((x) => x.status === "accepted");
   const byId = new Map(accepted.map((x) => [x.id, x]));
@@ -56,7 +59,10 @@ export function orderedSeams(s: Pick<Store, "seams" | "sequence">): Seam[] {
   return [...ordered, ...accepted.filter((x) => !seen.has(x.id))];
 }
 
-// Everything the export needs, from the current state.
+
+/**
+ * assemble the store state into a weld-job input
+ */
 export function jobInput(s: Store): JobInput {
   const b = s.health?.bounds;
   return {
@@ -68,26 +74,35 @@ export function jobInput(s: Store): JobInput {
   };
 }
 
+/**
+ * compile the current state into a preview weld job
+ */
 export function previewJob(s: Store) {
   return compileWeldJob(jobInput(s));
 }
 
-// Everything the Procedures step shows for one seam: effective values, derived numbers, warnings.
+
+/**
+ * evaluate one seam against the procedure library
+ */
 export function seamCalc(seam: Seam, procedures: Procedure[], units: Units, upAxis: UpAxis): SeamCalc | null {
   return evaluateSeam(seam, procedures, units, upAxis);
 }
 
-// minLengthMm null means automatic: 1% of the part's diagonal, at least 5 mm.
+
 export type DetectSettings = { featureAngleDeg: number; minLengthMm: number | null; gapMm: number; includeOutside: boolean };
 
 export type CandidateFilter = { hidden: SeamSource[]; minLengthMm: number };
 
 export type Section = { axis: SectionAxis; offset: number; flipped: boolean };
 
-// A confirmed section: everything (detection, list, picking, drawing) is limited to its kept side.
-// plane is in file coordinates; points with normal·p + constant >= 0 are inside.
+
+
 export type WorkArea = { plane: { normal: [number, number, number]; constant: number }; label: string };
 
+/**
+ * check whether a seam has any point inside the work area
+ */
 export function inWorkArea(seam: { points: Float32Array }, area: WorkArea | null): boolean {
   if (!area) return true;
   const { normal: n, constant } = area.plane;
@@ -98,7 +113,7 @@ export function inWorkArea(seam: { points: Float32Array }, area: WorkArea | null
 
 type WorkState = Pick<Store, "procedures" | "sequence" | "waits" | "job" | "step" | "verdict" | "health" | "mesh" | "originalMesh" | "repaired" | "repairStats" | "repairedBinary" | "frame" | "seams" | "rejectedIds" | "featureChains" | "detectSettings" | "detection" | "hiddenBodies" | "candidateFilter">;
 
-// scope describes the area searched ("inside the section cut"), null for the whole part.
+
 export type Detection = { status: "idle" | "running" | "done" | "error"; error: string | null; run: number; scope?: string | null };
 
 export type SectionAxis = "x" | "y" | "z";
@@ -107,33 +122,64 @@ export type PendingAction = "split" | "merge" | null;
 
 export const DEFAULT_DETECT_SETTINGS: DetectSettings = { featureAngleDeg: 45, minLengthMm: null, gapMm: 0.05, includeOutside: false };
 
+/**
+ * suggest a minimum seam length from the part size
+ */
 export function autoMinLengthMm(health: Health | null, units: Units): number {
   if (!health) return 5;
   const s = partSizeMm(health.bounds.size, units, "+z");
   return Math.max(5, Math.round(Math.hypot(s.x, s.y, s.z) * 0.01));
 }
 
+/**
+ * allow small gaps when testing whether seams join
+ */
 const joinTolerance = (a: Seam, b: Seam) => Math.max(a.length, b.length) * 1e-3;
 
-// Seams that touch the given one end to end, so the two can become one continuous weld.
+
+/**
+ * list accepted seams that touch the given seam end to end
+ */
 export function mergeTargets(seams: Seam[], id: string): Seam[] {
   const seam = seams.find((x) => x.id === id);
   if (!seam || seam.closed) return [];
   return seams.filter((x) => x.id !== id && x.status === "accepted" && joinPaths(seam, x, joinTolerance(seam, x)) !== null);
 }
 
+/**
+ * test whether two seams follow the same path
+ */
 const duplicates = (a: Seam, b: Seam) => samePath(a, b, joinTolerance(a, b) * 5);
 
+
+const MAX_SEAM_NAME = 120;
+const MAX_JOB_NAME = 120;
+const MAX_JOB_NOTES = 5000;
+const MAX_PROCEDURE_NAME = 120;
+const MAX_GAS_NAME = 120;
+const MAX_FILENAME = 255;
+const MAX_SEAMS = 5000;
+const MAX_PROCEDURES = 200;
+
+/**
+ * test whether a candidate passes the current filters
+ */
 export function candidateVisible(seam: Seam, filter: CandidateFilter, units: Units): boolean {
   return seam.status === "accepted" || (!filter.hidden.includes(seam.source) && seamLengthMm(seam, units) >= filter.minLengthMm);
 }
 
 const JOINT_FOR_SOURCE: Partial<Record<SeamSource, SeamCandidate["jointType"]>> = { edge_chain: "unknown", drawn: "unknown" };
 
+/**
+ * measure a seam path in millimetres
+ */
 export function seamLengthMm(seam: SeamPath, units: Units): number {
   return seam.length * MM_PER_UNIT[units];
 }
 
+/**
+ * pick the next free seam name like S4
+ */
 function nextName(seams: Seam[]): string {
   let n = 1;
   const taken = new Set(seams.map((s) => s.name));
@@ -141,6 +187,9 @@ function nextName(seams: Seam[]): string {
   return `S${n}`;
 }
 
+/**
+ * build an accepted seam from a picked or drawn path
+ */
 function manualSeam(path: SeamPath, source: SeamSource, seams: Seam[]): Seam {
   return { ...path, id: seamId(source, path), source, jointType: JOINT_FOR_SOURCE[source] ?? "unknown", angleDeg: 0, confidence: 1, reason: source === "drawn" ? "Drawn by hand" : "Picked edge", status: "accepted", name: nextName(seams) };
 }
@@ -148,7 +197,13 @@ function manualSeam(path: SeamPath, source: SeamSource, seams: Seam[]): Seam {
 export const STAGE_ORDER: StageId[] = ["read", "weld", "topology", "orient"];
 const STAGE_WEIGHT: Record<StageId, number> = { read: 0.35, weld: 0.25, topology: 0.2, orient: 0.2 };
 
+/**
+ * create the initial part-check stage states
+ */
 const initialStages = (): Record<StageId, StageStatus> => ({ read: "pending", weld: "pending", topology: "pending", orient: "pending" });
+/**
+ * create the default units and up-axis frame
+ */
 const initialFrame = (): Frame => ({ units: "mm", unitsGuessed: false, unitsNote: null, upAxis: "+z", upGuessed: false, confirmed: false });
 
 export type Store = {
@@ -185,12 +240,8 @@ export type Store = {
   section: Section | null;
   workArea: WorkArea | null;
   procedures: Procedure[];
-  // While Split is on: cut positions in mm from the seam start, previewed live.
   splitCuts: number[] | null;
-  // Focus mode: these bodies stay solid, the rest is ghosted, and the camera frames box (part coords).
   focus: { bodies: number[]; label: string; box: { min: [number, number, number]; max: [number, number, number] } } | null;
-  // The last seam edit, so it can be undone from the toast.
-  // Ask the viewport to frame these seams (used by review-one-by-one).
   cameraTarget: { ids: string[]; at: number } | null;
   reviewing: boolean;
   saveStatus: "idle" | "saving" | "saved" | "error";
@@ -258,7 +309,7 @@ export type Store = {
   toggleBody: (body: number) => void;
   isolateBody: (body: number) => void;
   showAllBodies: () => void;
-  saveProcedure: (procedure: Procedure) => void;
+  saveProcedure: (procedure: Procedure) => string | null;
   duplicateProcedure: (id: string) => string;
   deleteProcedure: (id: string) => string | null;
   assignProcedure: (seamIds: string[], procedureId: string) => void;
@@ -271,6 +322,9 @@ export type Store = {
   updateWeld: (seamIds: string[], patch: Partial<SeamWeld>) => void;
 };
 
+/**
+ * create a blank part state for a newly loaded file
+ */
 const clearedPart = () => ({
   verdict: null,
   error: null,
@@ -304,10 +358,16 @@ const clearedPart = () => ({
   job: { ...DEFAULT_JOB },
 });
 
+/**
+ * capture undo state before a mutating action
+ */
 function remember(s: Store, label: string): Pick<Store, "undo" | "redo"> {
   return { undo: { label, at: Date.now(), state: { seams: s.seams, sequence: s.sequence, waits: s.waits, rejectedIds: s.rejectedIds, selectedSeamId: s.selectedSeamId } }, redo: null };
 }
 
+/**
+ * capture the restorable part of the store
+ */
 function snapshot(s: Store): WorkState {
   return {
     step: s.step, verdict: s.verdict, health: s.health, mesh: s.mesh, originalMesh: s.originalMesh, repaired: s.repaired,
@@ -320,15 +380,17 @@ function snapshot(s: Store): WorkState {
 
 const transient = { focus: null, undo: null, redo: null, reviewing: false, phase: "checked" as Phase, selectedSeamId: null, pendingAction: null as PendingAction, splitCuts: null, error: null, section: null, workArea: null, xray: false };
 
-// The procedure library is the user's own data: kept in the browser across reloads and parts.
 const PROCEDURES_KEY = "weld.procedures.v1";
 
+/**
+ * load saved procedures, falling back to examples
+ */
 function loadProcedures(): Procedure[] {
   try {
     const saved = typeof localStorage === "undefined" ? null : localStorage.getItem(PROCEDURES_KEY);
     const parsed = saved ? (JSON.parse(saved) as unknown[]) : null;
     if (Array.isArray(parsed) && parsed.length && parsed.every((p) => procedureSchema.safeParse(p).success)) return parsed as Procedure[];
-  } catch { /* fall back to the examples */ }
+  } catch {  }
   return structuredClone(EXAMPLE_PROCEDURES);
 }
 
@@ -355,11 +417,12 @@ export const useStore = create<Store>((set, get) => ({
 
   startAnalysing: (fileName, sizeBytes) => {
     const generation = get().generation + 1;
+    const name = fileName.slice(0, MAX_FILENAME);
     set({
       ...clearedPart(),
       phase: "analysing",
       generation,
-      part: { fileName, sizeBytes, sha256: null, format: null, solids: 0, warnings: [] },
+      part: { fileName: name, sizeBytes, sha256: null, format: null, solids: 0, warnings: [] },
     });
     return generation;
   },
@@ -440,7 +503,9 @@ export const useStore = create<Store>((set, get) => ({
 
   loadAnother: () => set((s) => ({ ...clearedPart(), phase: "empty", generation: s.generation + 1 })),
 
-  // Moving past the Part step accepts the units and up axis shown (they can still be changed later).
+  /**
+   * Moving past the Part step accepts the units and up axis shown (they can still be changed later).
+   */
   setStep: (step) => set((s) => ({ step, frame: step !== "part" && !s.frame.confirmed ? { ...s.frame, confirmed: true } : s.frame, pendingAction: null, splitCuts: null })),
   setTool: (tool) => set({ tool }),
   setPanelCollapsed: (panelCollapsed) => set({ panelCollapsed }),
@@ -459,7 +524,6 @@ export const useStore = create<Store>((set, get) => ({
     return run;
   },
 
-  // Re-running keeps accepted seams and never brings back rejected ones; ids are stable across runs.
   finishDetect: (run, result) => set((s) => {
     if (run !== s.detection.run) return {};
     const accepted = s.seams.filter((x) => x.status === "accepted");
@@ -493,16 +557,19 @@ export const useStore = create<Store>((set, get) => ({
     return {
       ...remember(s, `Rejected ${gone.size}`),
       seams: s.seams.filter((x) => !(gone.has(x.id) && x.status === "candidate")),
-      rejectedIds: [...s.rejectedIds, ...ids],
+      rejectedIds: [...new Set([...s.rejectedIds, ...ids])],
       selectedSeamId: s.selectedSeamId && gone.has(s.selectedSeamId) ? null : s.selectedSeamId,
     };
   }),
 
   addSeam: (path, source) => {
+    if (get().seams.length >= MAX_SEAMS) return `Too many seams (${MAX_SEAMS} maximum).`;
     const seam = manualSeam(path, source, get().seams);
     const existing = get().seams.find((x) => x.status === "accepted" && duplicates(x, seam));
     if (existing) { set({ selectedSeamId: existing.id }); return existing.id; }
-    // A candidate on the same line is replaced by the seam the user added.
+    /**
+     * A candidate on the same line is replaced by the seam the user added.
+     */
     set((s) => ({ ...remember(s, `Added ${seam.name}`), seams: [...s.seams.filter((x) => x.id !== seam.id && !(x.status === "candidate" && duplicates(x, seam))), seam], selectedSeamId: seam.id }));
     return seam.id;
   },
@@ -510,14 +577,18 @@ export const useStore = create<Store>((set, get) => ({
   selectSeam: (selectedSeamId) => set({ selectedSeamId, pendingAction: null, splitCuts: null }),
   setHoverSeam: (hoverSeamId) => set({ hoverSeamId }),
 
-  renameSeam: (id, name) => set((s) => ({ seams: s.seams.map((x) => (x.id === id ? { ...x, name } : x)) })),
+  renameSeam: (id, name) => set((s) => {
+    const next = name.trim().slice(0, MAX_SEAM_NAME);
+    if (!next) return {};
+    if (s.seams.some((x) => x.id !== id && x.name === next)) return {};
+    return { seams: s.seams.map((x) => (x.id === id ? { ...x, name: next } : x)) };
+  }),
 
   reverseSeam: (id) => set((s) => ({ ...remember(s, `Reversed ${s.seams.find((x) => x.id === id)?.name ?? "seam"}`), seams: s.seams.map((x) => (x.id === id ? { ...x, ...reversePath(x) } : x)) })),
 
   setFocus: (focus) => set({ focus }),
   frameSeams: (ids) => set({ cameraTarget: { ids, at: Date.now() } }),
   setReviewing: (reviewing) => set({ reviewing }),
-  // Brings a dropped suggestion back as a candidate (review "Previous" after a drop).
   restoreCandidate: (seam) => set((s) => (s.seams.some((x) => x.id === seam.id) ? {} : {
     seams: [...s.seams, { ...seam, status: "candidate", name: "" }],
     rejectedIds: s.rejectedIds.filter((x) => x !== seam.id),
@@ -536,7 +607,7 @@ export const useStore = create<Store>((set, get) => ({
   deleteSeam: (id) => set((s) => ({
     ...remember(s, `Deleted ${s.seams.find((x) => x.id === id)?.name || "candidate"}`),
     seams: s.seams.filter((x) => x.id !== id),
-    rejectedIds: [...s.rejectedIds, id],
+    rejectedIds: s.rejectedIds.includes(id) ? s.rejectedIds : [...s.rejectedIds, id],
     selectedSeamId: s.selectedSeamId === id ? null : s.selectedSeamId,
     pendingAction: null,
   })),
@@ -590,12 +661,22 @@ export const useStore = create<Store>((set, get) => ({
   saveCheckpoint: () => set((s) => ({ checkpoint: { savedAt: Date.now(), state: snapshot(s) } })),
   restoreCheckpoint: () => set((s) => (s.checkpoint ? { ...s.checkpoint.state, ...transient } : {})),
   resetToInitial: () => set((s) => (s.initial ? { ...s.initial, ...transient } : {})),
-  saveProcedure: (procedure) => set((s) => ({ procedures: s.procedures.some((p) => p.id === procedure.id) ? s.procedures.map((p) => (p.id === procedure.id ? procedure : p)) : [...s.procedures, procedure] })),
+  saveProcedure: (procedure) => {
+    const capped: Procedure = { ...procedure, name: procedure.name.slice(0, MAX_PROCEDURE_NAME), gas: { ...procedure.gas, name: procedure.gas.name.slice(0, MAX_GAS_NAME) } };
+    let err: string | null = null;
+    set((s) => {
+      if (s.procedures.some((p) => p.id === capped.id)) return { procedures: s.procedures.map((p) => (p.id === capped.id ? capped : p)) };
+      if (s.procedures.length >= MAX_PROCEDURES) { err = `Too many procedures (${MAX_PROCEDURES} maximum).`; return {}; }
+      return { procedures: [...s.procedures, capped] };
+    });
+    return err;
+  },
 
   duplicateProcedure: (id) => {
     const source = get().procedures.find((p) => p.id === id);
     if (!source) return id;
-    const copy: Procedure = { ...structuredClone(source), id: `proc_${Date.now().toString(36)}`, name: `${source.name.replace(/^EXAMPLE /, "")} (copy)` };
+    if (get().procedures.length >= MAX_PROCEDURES) return `Too many procedures (${MAX_PROCEDURES} maximum).`;
+    const copy: Procedure = { ...structuredClone(source), id: `proc_${Date.now().toString(36)}`, name: `${source.name.replace(/^EXAMPLE /, "")} (copy)`.slice(0, MAX_PROCEDURE_NAME) };
     set((s) => ({ procedures: [...s.procedures, copy] }));
     return copy.id;
   },
@@ -620,7 +701,9 @@ export const useStore = create<Store>((set, get) => ({
     return { sequence: ids };
   }),
 
-  // Reorders and flips seams to cut air travel. Returns the mm of air travel saved.
+  /**
+   * Reorders and flips seams to cut air travel. Returns the mm of air travel saved.
+   */
   autoOrder: () => {
     const s = get();
     const list = orderedSeams(s);
@@ -640,9 +723,16 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   setWait: (id, seconds) => set((s) => ({ waits: { ...s.waits, [id]: Math.max(0, seconds) } })),
-  setJob: (patch) => set((s) => ({ job: { ...s.job, ...patch } })),
+  setJob: (patch) => set((s) => {
+    const next = { ...s.job, ...patch };
+    if (patch.name !== undefined) next.name = patch.name.slice(0, MAX_JOB_NAME);
+    if (patch.notes !== undefined) next.notes = patch.notes.slice(0, MAX_JOB_NOTES);
+    return { job: next };
+  }),
 
-  // Brings an exported job back onto the same part: seams, settings, order and procedures.
+  /**
+   * Brings an exported job back onto the same part: seams, settings, order and procedures.
+   */
   importJob: (job) => {
     const s = get();
     if (!s.mesh) return "Load the part first.";
@@ -670,11 +760,15 @@ export const useStore = create<Store>((set, get) => ({
         },
       };
     });
-    const procedures = [...s.procedures.filter((p) => !job.procedures.some((j) => j.id === p.id)), ...job.procedures];
+    const procedures = [...s.procedures.filter((p) => !job.procedures.some((j) => j.id === p.id)), ...job.procedures].slice(0, MAX_PROCEDURES).map((p) => ({
+      ...p,
+      name: p.name.slice(0, MAX_PROCEDURE_NAME),
+      gas: { ...p.gas, name: p.gas.name.slice(0, MAX_GAS_NAME) },
+    }));
     set({
-      seams: [...s.seams.filter((x) => x.status === "candidate"), ...seams], procedures, sequence: seams.map((x) => x.id),
+      seams: [...s.seams.filter((x) => x.status === "candidate"), ...seams.slice(0, MAX_SEAMS)], procedures, sequence: seams.slice(0, MAX_SEAMS).map((x) => x.id),
       waits: Object.fromEntries(job.seams.map((x) => [x.id, x.wait_after_s])),
-      job: { ...s.job, name: job.job.name, notes: job.job.notes, status: job.job.status, airSpeedMmS: job.job.execution.air_speed_mm_s, waypointSpacingMm: job.job.execution.waypoint_spacing_mm, supervision: job.job.execution.default_supervision },
+      job: { ...s.job, name: job.job.name.slice(0, MAX_JOB_NAME), notes: job.job.notes.slice(0, MAX_JOB_NOTES), status: job.job.status, airSpeedMmS: job.job.execution.air_speed_mm_s, waypointSpacingMm: job.job.execution.waypoint_spacing_mm, supervision: job.job.execution.default_supervision },
       selectedSeamId: null,
     });
     return `Imported ${seams.length} seam${seams.length === 1 ? "" : "s"} from ${job.job.name}.`;
@@ -701,6 +795,6 @@ if (typeof localStorage !== "undefined") {
   useStore.subscribe((s) => {
     if (s.procedures === last) return;
     last = s.procedures;
-    try { localStorage.setItem(PROCEDURES_KEY, JSON.stringify(s.procedures)); } catch { /* storage full or blocked */ }
+    try { localStorage.setItem(PROCEDURES_KEY, JSON.stringify(s.procedures)); } catch {  }
   });
 }

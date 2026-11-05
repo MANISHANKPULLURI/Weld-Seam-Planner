@@ -1,5 +1,8 @@
 import { LockIcon } from "../icons";
 
+/**
+ * render the stays-in-your-browser badge
+ */
 export function LocalOnlyChip() {
   return (
     <span className="local-chip" title="Your STL is checked and repaired in this browser. It is never uploaded.">

@@ -6,7 +6,7 @@ export type Aws = "1G" | "1F" | "2G" | "2F" | "3G" | "3F" | "4G" | "4F" | "incli
 export type WeldSize = { basis: "a" | "z"; value_mm: number };
 export type Intermittent = { weld_length_mm: number; pitch_mm: number };
 
-// EXAMPLE starting points only, never a recommendation: real values come from the shop's WPS.
+
 export const EXAMPLE_PROCEDURES: Procedure[] = [
   {
     id: "proc_mag135", name: "EXAMPLE MAG 135, steel, 1.0 mm wire", process: { kind: "gmaw", iso_4063: 135 },
@@ -40,12 +40,18 @@ export const EXAMPLE_PROCEDURES: Procedure[] = [
 
 export const PROCESS_K: Record<Procedure["process"]["kind"], number> = { gmaw: 0.8, fcaw: 0.8, gtaw: 0.6 };
 
-// Arc energy E = U·I·60 / (1000·v) in kJ/mm, v in mm/min (EN 1011-1). Heat input Q = k·E.
+
+/**
+ * compute arc energy in kj per mm from voltage, current and travel speed
+ */
 export function arcEnergyKjMm(voltageV: number, currentA: number, travelMmMin: number): number {
   return travelMmMin > 0 ? (voltageV * currentA * 60) / (1000 * travelMmMin) : 0;
 }
 
-// Length actually welded: continuous, or stitches of weld_length every pitch, the last one fitting the seam.
+
+/**
+ * compute welded length accounting for intermittent stitch pattern
+ */
 export function weldedLengthMm(lengthMm: number, intermittent: Intermittent | null): number {
   if (!intermittent) return lengthMm;
   const { weld_length_mm: w, pitch_mm: p } = intermittent;
@@ -54,16 +60,25 @@ export function weldedLengthMm(lengthMm: number, intermittent: Intermittent | nu
   return Math.min(lengthMm, count * w);
 }
 
+/**
+ * compute arc time in seconds from length, travel speed and passes
+ */
 export function arcTimeS(lengthMm: number, travelMmMin: number, passes = 1, intermittent: Intermittent | null = null): number {
   return travelMmMin > 0 ? (weldedLengthMm(lengthMm, intermittent) / travelMmMin) * 60 * Math.max(1, passes) : 0;
 }
 
-// Equal-leg fillet at 90°: throat a = z / √2. Other opening angles: a = z·cos(opening/2).
+
+/**
+ * convert between fillet throat and leg sizes for a joint opening
+ */
 export function filletSizes(size: WeldSize, openingDeg = 90): { a: number; z: number } {
   const f = Math.cos(((openingDeg / 2) * Math.PI) / 180);
   return size.basis === "a" ? { a: size.value_mm, z: size.value_mm / f } : { a: size.value_mm * f, z: size.value_mm };
 }
 
+/**
+ * map part coordinates to z-up job coordinates for an up axis
+ */
 export function toZUp(v: [number, number, number], upAxis: UpAxis): [number, number, number] {
   return upAxis === "+y" ? [v[0], -v[2], v[1]] : v;
 }
@@ -71,11 +86,14 @@ export function toZUp(v: [number, number, number], upAxis: UpAxis): [number, num
 const deg = (r: number) => (r * 180) / Math.PI;
 const unit = (v: number[]) => { const l = Math.hypot(v[0]!, v[1]!, v[2]!) || 1; return [v[0]! / l, v[1]! / l, v[2]! / l]; };
 
-// Simplified ISO 6947 classifier from the weld axis and the weld face direction (Z up, gravity -Z):
-// - axis steeper than 45° from horizontal: vertical, PF when travelling up, PG when down;
-// - otherwise by the face direction (bisector of the two surface normals) measured from straight up:
-//   fillets PA < 30° ≤ PB < 80° ... 100° < PD ≤ 150° < PE; butts PA < 30°, PC 60-120°, PE > 150°.
-// direction and normals must already be in Z-up world space.
+
+
+
+
+
+/**
+ * classify weld position from travel direction and surface normals
+ */
 export function weldPosition(direction: [number, number, number], normalA: [number, number, number], normalB: [number, number, number], joint: "fillet" | "butt" | "corner" | "unknown"): { iso: Iso6947; aws: Aws } {
 
   const d = unit(direction);
@@ -103,7 +121,10 @@ export function weldPosition(direction: [number, number, number], normalA: [numb
   return { iso: "inclined", aws: "inclined" };
 }
 
-// Position of a seam path in file coordinates: uses the middle segment and the normals there.
+
+/**
+ * derive weld position from seam midpoint direction and normals
+ */
 export function seamPosition(points: Float32Array, normalsA: Float32Array, normalsB: Float32Array, upAxis: UpAxis, joint: "fillet" | "butt" | "corner" | "unknown") {
   const n = points.length / 3;
   const i = Math.max(0, Math.floor((n - 1) / 2));
