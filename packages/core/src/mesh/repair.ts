@@ -1,5 +1,8 @@
-// Walks each closed boundary loop and fills it with a triangle fan from its first vertex.
-// Winding of the new faces is fixed afterwards by orientFaces.
+
+
+/**
+ * close open boundary loops by fan-triangulating them
+ */
 export function fillBoundaryLoops(registry: Map<number, number[]>, indices: Uint32Array): Uint32Array {
 
   const added: number[] = [];

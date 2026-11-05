@@ -1,10 +1,16 @@
 import type { SeamPath } from "./types.ts";
 
+/**
+ * extract a sub-path between two point indices and remeasure it
+ */
 function slice(path: SeamPath, from: number, to: number): SeamPath {
   const pick = (a: Float32Array) => a.slice(from * 3, (to + 1) * 3);
   return measure({ points: pick(path.points), normalsA: pick(path.normalsA), normalsB: pick(path.normalsB), closed: false, length: 0 });
 }
 
+/**
+ * recompute total length of a seam path from its points
+ */
 export function measure(path: SeamPath): SeamPath {
   const p = path.points;
   const n = p.length / 3;
@@ -14,6 +20,9 @@ export function measure(path: SeamPath): SeamPath {
   return { ...path, length };
 }
 
+/**
+ * reverse point and normal order of a seam path
+ */
 export function reversePath(path: SeamPath): SeamPath {
   const flip = (a: Float32Array) => {
     const out = new Float32Array(a.length);
@@ -24,8 +33,11 @@ export function reversePath(path: SeamPath): SeamPath {
   return { ...path, points: flip(path.points), normalsA: flip(path.normalsA), normalsB: flip(path.normalsB) };
 }
 
-// Splits at parameter t along segment `segment` (from point segment to segment + 1, wrapping on loops).
-// A closed loop opens at that point instead of becoming two pieces.
+
+
+/**
+ * split a seam path at a segment parameter into one or two pieces
+ */
 export function splitPath(path: SeamPath, segment: number, t: number): SeamPath[] {
 
   const n = path.points.length / 3;
@@ -63,7 +75,10 @@ export function splitPath(path: SeamPath, segment: number, t: number): SeamPath[
   return [slice(withCut, 0, at), slice(withCut, at, total - 1)];
 }
 
-// Joins two open seams that share an end point (within tolerance), reversing either as needed.
+
+/**
+ * join two open paths end to end when endpoints meet within tolerance
+ */
 export function joinPaths(a: SeamPath, b: SeamPath, tolerance: number): SeamPath | null {
 
   if (a.closed || b.closed) return null;
@@ -78,7 +93,7 @@ export function joinPaths(a: SeamPath, b: SeamPath, tolerance: number): SeamPath
   let second = b;
 
   if (near(end(a, true), end(b, false))) {
-    // already in order
+    
   } else if (near(end(a, true), end(b, true))) {
     second = reversePath(b);
   } else if (near(end(a, false), end(b, false))) {
@@ -101,7 +116,10 @@ export function joinPaths(a: SeamPath, b: SeamPath, tolerance: number): SeamPath
   return near(end(joined, false), end(joined, true)) ? measure({ ...joined, points: joined.points.slice(0, -3), normalsA: joined.normalsA.slice(0, -3), normalsB: joined.normalsB.slice(0, -3), closed: true }) : joined;
 }
 
-// Where a distance (from the start, in path units) falls: segment index and fraction within it.
+
+/**
+ * find segment, parameter and point at a distance along a path
+ */
 export function locateAlong(path: SeamPath, distance: number): { segment: number; t: number; point: [number, number, number] } {
   const p = path.points, n = p.length / 3;
   const segments = path.closed ? n : n - 1;
@@ -118,7 +136,10 @@ export function locateAlong(path: SeamPath, distance: number): { segment: number
   return { segment: 0, t: 0, point: [p[0]!, p[1]!, p[2]!] };
 }
 
-// Cuts at several distances from the start (path units). Open paths give distances.length + 1 pieces.
+
+/**
+ * split a path into pieces at the given arc-length distances
+ */
 export function splitAtDistances(path: SeamPath, distances: number[]): SeamPath[] {
   const cuts = [...new Set(distances.filter((d) => d > 1e-9 && d < path.length - 1e-9))].sort((a, b) => a - b);
   if (cuts.length === 0) return [path];
@@ -128,7 +149,7 @@ export function splitAtDistances(path: SeamPath, distances: number[]): SeamPath[
   for (const d of cuts) {
     const { segment, t } = locateAlong(rest, d - consumed);
     const parts = splitPath(rest, segment, t);
-    if (parts.length === 1) { rest = parts[0]!; consumed = d; continue; } // a loop opened at the first cut
+    if (parts.length === 1) { rest = parts[0]!; consumed = d; continue; } 
     out.push(parts[0]!);
     rest = parts[1]!;
     consumed = d;

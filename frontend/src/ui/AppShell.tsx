@@ -13,6 +13,9 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "review", label: "Review" },
 ];
 
+/**
+ * render the planner frame with steps and viewport
+ */
 export function AppShell({ children, viewport }: { children: React.ReactNode; viewport: React.ReactNode }) {
   const phase = useStore((s) => s.phase);
   const step = useStore((s) => s.step);

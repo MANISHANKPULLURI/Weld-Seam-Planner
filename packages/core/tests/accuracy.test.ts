@@ -4,13 +4,19 @@ import type { SeamCandidate } from "../src/index.ts";
 import { binaryStl, box, prism } from "./fixtures.ts";
 import type { Tri } from "./fixtures.ts";
 
-// Weldments whose real seams are known exactly. Scores detection on recall (share of real seam
-// length found), position error, and how many suggestions are not real seams.
+
+
 
 type P = [number, number, number];
 type Case = { name: string; tris: Tri[]; seams: P[][]; closed?: boolean[] };
 
+/**
+ * generate regular polygon points of radius r
+ */
 const ngon = (r: number, n: number): [number, number][] => Array.from({ length: n }, (_, i) => [r * Math.cos((2 * Math.PI * i) / n), r * Math.sin((2 * Math.PI * i) / n)]);
+/**
+ * lift polygon points into a closed loop at height y
+ */
 const loopAtY = (y: number, pts: [number, number][]): P[] => [...pts, pts[0]!].map(([x, z]) => [x, y, z]);
 
 const CASES: Case[] = [
@@ -56,7 +62,7 @@ const CASES: Case[] = [
   },
 ];
 
-// An arbitrary rotation so nothing benefits from being axis-aligned.
+
 const R = (() => {
   const [a, b, c] = [0.43, -0.71, 1.12];
   const [ca, sa, cb, sb, cc, sc] = [Math.cos(a), Math.sin(a), Math.cos(b), Math.sin(b), Math.cos(c), Math.sin(c)];
@@ -66,20 +72,38 @@ const R = (() => {
     [-ca * sb * cc + sa * sc, ca * sb * sc + sa * cc, ca * cb],
   ];
 })();
+/**
+ * rotate a point by the fixed test rotation matrix
+ */
 const rot = (p: P): P => R.map((row) => row[0]! * p[0] + row[1]! * p[1] + row[2]! * p[2]) as P;
 
+/**
+ * compute distance from a point to a single segment
+ */
 function distToSegment(p: P, a: P, b: P) {
   const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
   const t = Math.max(0, Math.min(1, (ap[0]! * ab[0]! + ap[1]! * ab[1]! + ap[2]! * ab[2]!) / (ab[0]! ** 2 + ab[1]! ** 2 + ab[2]! ** 2 || 1)));
   return Math.hypot(ap[0]! - ab[0]! * t, ap[1]! - ab[1]! * t, ap[2]! - ab[2]! * t);
 }
+/**
+ * compute minimum distance from a point to a polyline
+ */
 const distToLine = (p: P, line: P[]) => Math.min(...line.slice(1).map((b, i) => distToSegment(p, line[i]!, b)));
+/**
+ * sum segment lengths of a polyline
+ */
 const lineLength = (line: P[]) => line.slice(1).reduce((s, b, i) => s + Math.hypot(b[0] - line[i]![0], b[1] - line[i]![1], b[2] - line[i]![2]), 0);
+/**
+ * extract ordered points from a detected candidate path
+ */
 const pointsOf = (c: SeamCandidate): P[] => {
   const pts: P[] = Array.from({ length: c.points.length / 3 }, (_, i) => [c.points[i * 3]!, c.points[i * 3 + 1]!, c.points[i * 3 + 2]!]);
   return c.closed ? [...pts, pts[0]!] : pts;
 };
 
+/**
+ * score detection recall and error for one rotated case
+ */
 function score(c: Case) {
   const tris = c.tris.map((t) => t.map(rot) as Tri);
   const seams = c.seams.map((line) => line.map(rot));
@@ -91,7 +115,7 @@ function score(c: Case) {
   const onSeam = new Set<SeamCandidate>();
 
   for (const line of seams) {
-    // Sample the real seam and count samples that some candidate passes through.
+    
     const total = lineLength(line);
     const steps = 200;
     let hit = 0;
@@ -133,7 +157,6 @@ describe("detection accuracy on known weldments (rotated)", () => {
       console.table(results.map((r) => ({ case: r.name, recall: `${(r.recall * 100).toFixed(1)}%`, maxErrorMm: r.maxError.toExponential(1), suggested: r.candidates, notOnRealSeam: r.extras.length })));
       console.table(extras);
     }
-    // Plate ends (end returns, 10 mm wide) are real contact lines a welder may wrap; nothing else.
     expect(extras.every((x) => x.length <= 12)).toBe(true);
   });
 });

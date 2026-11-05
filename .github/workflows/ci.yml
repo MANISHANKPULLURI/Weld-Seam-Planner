@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches: ["**"]
-    paths: ['packages/**', 'backend/**', 'frontend/**', 'package.json', 'bun.lock', '.github/workflows/ci.yml']
+    paths: ['packages/**', 'backend/**', 'frontend/**', 'package.json', 'bun.lock', '.github/workflows/ci.yml', 'Dockerfile', 'fly.toml', '.dockerignore']
   pull_request:
     branches: [main]
-    paths: ['packages/**', 'backend/**', 'frontend/**', 'package.json', 'bun.lock', '.github/workflows/ci.yml']
+    paths: ['packages/**', 'backend/**', 'frontend/**', 'package.json', 'bun.lock', '.github/workflows/ci.yml', 'Dockerfile', 'fly.toml', '.dockerignore']
 
 permissions:
   contents: read

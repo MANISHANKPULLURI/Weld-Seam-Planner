@@ -1,11 +1,14 @@
-// A weld run as a timeline: each seam is welded at its travel speed, with straight air moves between.
-// Coordinates are part (file) coordinates; durations are real seconds.
+
+
 export type SimSegment =
   | { kind: "arc"; id: string; points: Float32Array; normalsA: Float32Array; normalsB: Float32Array; closed: boolean; duration: number; cumulative: number[] }
   | { kind: "air"; from: [number, number, number]; to: [number, number, number]; duration: number };
 
 export type SimPose = { point: [number, number, number]; axis: [number, number, number]; welding: boolean; segment: number; fraction: number };
 
+/**
+ * build a timed weld segment with cumulative lengths
+ */
 export function arcSegment(id: string, points: Float32Array, normalsA: Float32Array, normalsB: Float32Array, closed: boolean, duration: number): SimSegment {
   const n = points.length / 3, cumulative = [0];
   const count = closed ? n + 1 : n;
@@ -16,12 +19,21 @@ export function arcSegment(id: string, points: Float32Array, normalsA: Float32Ar
   return { kind: "arc", id, points, normalsA, normalsB, closed, duration, cumulative };
 }
 
+/**
+ * sum the durations of all simulation segments
+ */
 export function totalDuration(segments: SimSegment[]) {
   return segments.reduce((t, s) => t + s.duration, 0);
 }
 
+/**
+ * normalize a vector to unit length
+ */
 const unit = (v: number[]): [number, number, number] => { const l = Math.hypot(v[0]!, v[1]!, v[2]!) || 1; return [v[0]! / l, v[1]! / l, v[2]! / l]; };
 
+/**
+ * find the torch pose at a simulation time
+ */
 export function poseAt(segments: SimSegment[], t: number): SimPose | null {
   let start = 0;
   for (let k = 0; k < segments.length; k++) {
@@ -46,7 +58,10 @@ export function poseAt(segments: SimSegment[], t: number): SimPose | null {
   return null;
 }
 
-// The welded part of an arc segment, up to fraction f, as a polyline.
+
+/**
+ * cut an arc segment at the welded fraction
+ */
 export function weldedPart(s: Extract<SimSegment, { kind: "arc" }>, f: number): Float32Array {
   const length = s.cumulative[s.cumulative.length - 1]!, d = f * length, n = s.points.length / 3;
   const out: number[] = [];

@@ -3,7 +3,10 @@ import { useStore } from "../../state/store";
 
 const KEY = "weld.seamGuideHidden";
 
-// First-visit guide for the seam step. Each line ticks off as the user does it.
+
+/**
+ * explain the seams step with live progress
+ */
 export function SeamGuide() {
   const [hidden, setHidden] = useState(() => localStorage.getItem(KEY) === "1");
   const detected = useStore((s) => s.detection.status === "done");
@@ -20,7 +23,7 @@ export function SeamGuide() {
     { done: accepted > 0, title: "Fix or add (optional)", text: "Click a seam to rename, reverse, split, merge or delete it. Use Pick edge or Draw for seams that were missed." },
   ];
 
-  // After the first detect the guide collapses to one line so Detect → Tools → List stay visible.
+  
   if (detected && !hidden) {
     const doneCount = (detected ? 1 : 0) + (accepted > 0 ? 2 : 0);
     return (

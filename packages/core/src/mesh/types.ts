@@ -1,4 +1,7 @@
 export class MeshError extends Error {
+/**
+ * create a mesh error with its name set
+ */
   constructor(message: string) {
     super(message);
     this.name = "MeshError";

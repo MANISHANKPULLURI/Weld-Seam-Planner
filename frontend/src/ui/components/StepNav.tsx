@@ -6,7 +6,10 @@ const ORDER: { id: Step; label: string }[] = [
   { id: "sequence", label: "Sequence" }, { id: "review", label: "Review" },
 ];
 
-// Back / Next at the bottom of each step. note explains what the next step needs, if anything.
+
+/**
+ * render previous and next step buttons
+ */
 export function StepNav({ note }: { note?: string }) {
   const step = useStore((s) => s.step);
   const setStep = useStore((s) => s.setStep);

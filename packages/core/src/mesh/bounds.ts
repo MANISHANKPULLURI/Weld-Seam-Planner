@@ -1,5 +1,8 @@
 import type { Bounds } from "./types.ts";
 
+/**
+ * compute axis-aligned bounding box and size from flat positions
+ */
 export function computeBounds(xyz: Float32Array): Bounds {
 
   if (xyz.length === 0) {
@@ -24,6 +27,9 @@ export function computeBounds(xyz: Float32Array): Bounds {
   };
 }
 
+/**
+ * compute bounding-box diagonal length as a scale measure
+ */
 export function diagonalOf(xyz: Float32Array): number {
   const { size } = computeBounds(xyz);
   return Math.hypot(size.x, size.y, size.z);

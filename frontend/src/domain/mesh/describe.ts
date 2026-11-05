@@ -4,11 +4,17 @@ export type CheckLevel = "ok" | "info" | "warn";
 
 export type HealthCheck = { id: "openEdges" | "nonManifold" | "bodies" | "flippedFaces"; label: string; value: number; ok: boolean; level: CheckLevel; hint: string };
 
+/**
+ * build one health check row from a measured value and its level
+ */
 function check(id: HealthCheck["id"], label: string, value: number, level: CheckLevel, hint: string): HealthCheck {
   return { id, label, value, ok: level !== "warn", level, hint };
 }
 
-// Several bodies are normal for a welded assembly, so they are reported as information, not a problem.
+
+/**
+ * describe the part as a list of pass and warn health checks
+ */
 export function healthChecks(h: Health): HealthCheck[] {
   return [
     check("openEdges", "Open edges", h.openEdges, h.openEdges === 0 ? "ok" : "warn", "The surface has gaps or openings."),
@@ -18,20 +24,32 @@ export function healthChecks(h: Health): HealthCheck[] {
   ];
 }
 
+/**
+ * report whether the part has blocking geometry issues
+ */
 export function hasIssues(h: Health): boolean {
   return h.openEdges > 0 || h.flippedFaces > 0;
 }
 
+/**
+ * format a triangle count with thousands separators
+ */
 export function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/**
+ * format a byte count as B, KB or MB
+ */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/**
+ * summarize removed degenerate and duplicate triangles
+ */
 export function cleanupNote(h: Health): string | null {
   const parts: string[] = [];
   if (h.degenerateRemoved > 0) parts.push(`${formatCount(h.degenerateRemoved)} zero-area`);
@@ -40,6 +58,9 @@ export function cleanupNote(h: Health): string | null {
   return `Removed ${parts.join(" and ")} triangle${h.degenerateRemoved + h.duplicateRemoved === 1 ? "" : "s"}. They add nothing to the shape.`;
 }
 
+/**
+ * format a bounding-box size as three measurements
+ */
 export function formatSize(size: { x: number; y: number; z: number }): string {
   const largest = Math.max(size.x, size.y, size.z);
   const digits = largest >= 100 ? 1 : largest >= 1 ? 2 : 3;

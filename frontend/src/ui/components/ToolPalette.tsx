@@ -9,12 +9,18 @@ const TOOLS: { id: Tool; label: string; icon: React.ReactNode; hint: string }[] 
   { id: "draw", label: "Draw", icon: <PencilIcon />, hint: "Click points on the part to trace a seam. Points snap to seam ends, corners and edges, shown by the orange dot. Enter or double-click to finish, Backspace undoes a point. (D)" },
 ];
 
+/**
+ * pick the select, edge or draw tool
+ */
 export function ToolPalette() {
   const tool = useStore((s) => s.tool);
   const setTool = useStore((s) => s.setTool);
   const needsEdges = useStore((s) => s.detection.status === "idle" || s.detection.status === "error");
 
-  // Pick edge and Draw's edge snapping need the part's edge lines, which detection finds; run it on first use.
+  
+  /**
+   * activate a tool, detecting edges first if needed
+   */
   function choose(id: Tool) {
     if ((id === "edge" || id === "draw") && needsEdges) detectWithSettings();
     setTool(id);

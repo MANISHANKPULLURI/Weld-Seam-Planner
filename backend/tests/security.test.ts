@@ -26,4 +26,17 @@ describe("security and robustness", () => {
     const res = await app.request("/api/v1/health/%2e%2e");
     expect([200, 404, 400]).toContain(res.status);
   });
+
+  test("sets explicit security headers on health", async () => {
+    const res = await app.request("/api/v1/health");
+    expect(res.status).toBe(200);
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(res.headers.get("strict-transport-security")).toContain("max-age=");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+  });
 });

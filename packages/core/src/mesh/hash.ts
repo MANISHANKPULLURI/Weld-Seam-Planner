@@ -1,4 +1,7 @@
-// Returns null where Web Crypto is unavailable (plain-http pages other than localhost).
+
+/**
+ * hash buffer bytes to lowercase hex sha256, or null without subtle crypto
+ */
 export async function sha256Hex(data: ArrayBuffer): Promise<string | null> {
 
   const subtle = globalThis.crypto?.subtle;

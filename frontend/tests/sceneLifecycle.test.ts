@@ -1,33 +1,57 @@
 import { describe, expect, test, beforeEach } from "bun:test";
 import * as THREE from "three";
 
-// Mock DOM for SceneController lifecycle
+
 class MockElement {
   style: Record<string,string> = {};
   children: MockElement[] = [];
   dataset: Record<string,string> = {};
   clientWidth = 800;
   clientHeight = 600;
+  /**
+   * fake an element bounding box for tests
+   */
   getBoundingClientRect() { return { left:0, top:0, width:800, height:600, right:800, bottom:600 } as DOMRect; }
+  /**
+   * track an appended child for tests
+   */
   appendChild(c: MockElement) { this.children.push(c); }
+  /**
+   * drop a tracked child for tests
+   */
   removeChild(c: MockElement) { this.children = this.children.filter(x=>x!==c); }
+  /**
+   * check whether a child is tracked
+   */
   contains(c: MockElement) { return this.children.includes(c); }
+  /**
+   * ignore event listeners in tests
+   */
   addEventListener(){}
+  /**
+   * ignore listener removal in tests
+   */
   removeEventListener(){}
+  /**
+   * always miss selector lookups in tests
+   */
   closest(_: string){ return null; }
 }
 
+/**
+ * install dom and three.js test doubles
+ */
 function installMocks() {
-  // @ts-ignore
+  
   globalThis.document = {
     documentElement: { getAttribute: () => "dark", setAttribute: ()=>{}, style:{} },
     createElement: (tag: string) => {
       if (tag === "canvas") {
         const el = new MockElement() as unknown as HTMLCanvasElement;
-        // @ts-ignore
+        
         el.getContext = () => ({ fillStyle:"", font:"", textAlign:"", textBaseline:"", fillText:()=>{}, strokeText:()=>{}, strokeStyle:"", lineWidth:0, clearRect:()=>{}, beginPath:()=>{}, arc:()=>{}, fill:()=>{}, stroke:()=>{}, moveTo:()=>{}, lineTo:()=>{} } as unknown as CanvasRenderingContext2D);
-        // @ts-ignore
-        el.width = 64; // @ts-ignore
+        
+        el.width = 64; 
         el.height = 32;
         return el as unknown as HTMLCanvasElement;
       }
@@ -35,7 +59,7 @@ function installMocks() {
     },
     querySelector: () => null,
   } as unknown as Document;
-  // @ts-ignore
+  
   globalThis.window = {
     devicePixelRatio: 1,
     matchMedia: () => ({ matches:false } as unknown as MediaQueryList),
@@ -43,13 +67,13 @@ function installMocks() {
     removeEventListener: ()=>{},
     dispatchEvent: ()=>true,
   } as unknown as Window & typeof globalThis;
-  // @ts-ignore
+  
   globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" } as unknown as CSSStyleDeclaration);
-  // @ts-ignore
+  
   globalThis.ResizeObserver = class { observe(){} disconnect(){} unobserve(){} };
-  // @ts-ignore
+  
   globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(()=>cb(Date.now()), 0) as unknown as number;
-  // @ts-ignore
+  
   globalThis.cancelAnimationFrame = (id: number) => clearTimeout(id);
 }
 
@@ -105,7 +129,7 @@ describe("lifecycle & coordinate preservation (unit, no WebGL)", () => {
     const max = new THREE.Vector3(10, 5, 20);
     const center = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
     expect(center).toEqual(new THREE.Vector3(0,0,10));
-    // ensure model far from origin still centers correctly
+    
     const farMin = new THREE.Vector3(10000, 10000, 10000);
     const farMax = new THREE.Vector3(10100, 10100, 10100);
     const farCenter = new THREE.Vector3().addVectors(farMin, farMax).multiplyScalar(0.5);
@@ -114,7 +138,7 @@ describe("lifecycle & coordinate preservation (unit, no WebGL)", () => {
 
   test("grid interval engineering steps", async () => {
     const { chooseEngineeringInterval } = await import("../src/viewer/viewMath.ts");
-    // for a range of dims, grid extent should be multiple of interval
+    
     for (const dim of [12, 45, 120, 550]) {
       const iv = chooseEngineeringInterval(dim);
       const extent = Math.ceil(dim*1.6/iv)*iv;
@@ -128,7 +152,7 @@ describe("lifecycle & coordinate preservation (unit, no WebGL)", () => {
     const bounds = { size: new THREE.Vector3(100,100,100), sphereRadius: 86.6 };
     const dWide = computeFitDistance(bounds, 45, 2, "perspective");
     const dTall = computeFitDistance(bounds, 45, 0.5, "perspective");
-    // wide aspect should not need dramatically larger distance than tall, but both > radius
+    
     expect(dWide).toBeGreaterThan(86);
     expect(dTall).toBeGreaterThan(86);
   });

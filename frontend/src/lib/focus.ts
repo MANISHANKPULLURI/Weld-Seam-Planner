@@ -4,6 +4,9 @@ type Box = { min: [number, number, number]; max: [number, number, number] };
 
 let cache: { mesh: MeshData; vertexBody: Int32Array } | null = null;
 
+/**
+ * map every vertex to its body, caching the result per mesh
+ */
 function vertexBodies(mesh: MeshData): Int32Array {
   if (cache?.mesh === mesh) return cache.vertexBody;
   const vertexBody = new Int32Array(mesh.positions.length / 3).fill(-1);
@@ -14,6 +17,9 @@ function vertexBodies(mesh: MeshData): Int32Array {
   return vertexBody;
 }
 
+/**
+ * measure the bounding box of the given bodies
+ */
 function boxOf(mesh: MeshData, bodies: Set<number>): Box {
   const vb = vertexBodies(mesh), p = mesh.positions;
   const min: [number, number, number] = [Infinity, Infinity, Infinity], max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
@@ -24,7 +30,10 @@ function boxOf(mesh: MeshData, bodies: Set<number>): Box {
   return { min, max };
 }
 
-// Focus on a seam: the bodies it touches stay solid. On a one-piece part, frame the seam's surroundings.
+
+/**
+ * frame the bodies a seam touches, or the seam itself
+ */
 export function focusForSeam(mesh: MeshData, seam: { name: string; points: Float32Array }): NonNullable<Store["focus"]> {
   const vb = vertexBodies(mesh), p = mesh.positions, s = seam.points;
   const b = mesh.health.bounds.size;
@@ -48,6 +57,9 @@ export function focusForSeam(mesh: MeshData, seam: { name: string; points: Float
   return { bodies: [...bodies], label: seam.name, box: boxOf(mesh, bodies) };
 }
 
+/**
+ * frame a single body for the camera
+ */
 export function focusForBody(mesh: MeshData, body: number): NonNullable<Store["focus"]> {
   return { bodies: [body], label: `Part ${body + 1}`, box: boxOf(mesh, new Set([body])) };
 }

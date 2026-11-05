@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { joinPaths, measure, reversePath, splitPath } from "../src/index.ts";
 import type { SeamPath } from "../src/index.ts";
 
+/**
+ * build a measured seam path from points for edit tests
+ */
 const path = (pts: number[][], closed = false): SeamPath => {
   const points = new Float32Array(pts.flat());
   const normals = new Float32Array(pts.length * 3);

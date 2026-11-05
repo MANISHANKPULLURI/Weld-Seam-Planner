@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { formatCount, formatSize, hasIssues, healthChecks } from "../src/domain/mesh/describe";
 
+/**
+ * build a size vector for test health
+ */
 const size = (x: number, y: number, z: number) => ({ x, y, z });
 
 describe("health summary", () => {

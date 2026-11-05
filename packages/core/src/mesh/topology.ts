@@ -1,7 +1,7 @@
 export const BOUNDARY = -1;
 export const NON_MANIFOLD = -2;
 
-// Half-edge h = 3 * face + k runs from indices[h] to indices[3 * face + (k + 1) % 3].
+
 export type Topology = {
   faceCount: number;
   edgeCount: number;
@@ -12,10 +12,16 @@ export type Topology = {
   nonManifold: number;
 };
 
+/**
+ * return the end vertex of a half-edge within its triangle
+ */
 export function halfEdgeEnd(indices: Uint32Array, h: number): number {
   return indices[h - (h % 3) + ((h % 3) + 1) % 3]!;
 }
 
+/**
+ * build half-edge topology with twin, edges and open counts
+ */
 export function buildTopology(indices: Uint32Array, vertexCount: number): Topology {
 
   const faceCount = indices.length / 3;
@@ -90,6 +96,9 @@ export function buildTopology(indices: Uint32Array, vertexCount: number): Topolo
   return { faceCount, edgeCount: uses.length, twin, edgeOf, edgeUses: Uint32Array.from(uses), openEdges, nonManifold };
 }
 
+/**
+ * collect boundary half-edges into a start-to-end registry
+ */
 export function boundaryRegistry(indices: Uint32Array, topology: Topology): Map<number, number[]> {
 
   const registry = new Map<number, number[]>();
@@ -108,8 +117,11 @@ export function boundaryRegistry(indices: Uint32Array, topology: Topology): Map<
   return registry;
 }
 
-// Faces join a body across manifold edges and across shared vertices, except vertices on
-// non-manifold edges. Plates that only touch stay separate; cracks in one surface do not split it.
+
+
+/**
+ * group connected triangles into bodies via shared edges and vertices
+ */
 export function labelBodies(indices: Uint32Array, vertexCount: number, topology: Topology): { bodyOfTriangle: Uint32Array; bodyCount: number } {
 
   const faceCount = indices.length / 3;

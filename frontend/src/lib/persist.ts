@@ -1,13 +1,13 @@
 import { useStore } from "../state/store";
 import type { Store } from "../state/store";
 
-// The whole plan (mesh included) is kept in IndexedDB so a refresh or a closed tab loses nothing.
-// Typed arrays are stored as-is by the structured clone algorithm, and shared references (the same
-// mesh in the checkpoint and the current state) are stored once.
+
+
+
 
 const DB = "weld-planner", STORE = "session", KEY = "current", VERSION = 1;
 
-// Everything that makes up the user's work. Transient UI (selection, open panels, section) is left out.
+
 const SAVED_KEYS = [
   "step", "verdict", "part", "health", "mesh", "originalMesh", "repaired", "repairStats", "repairedBinary", "frame",
   "seams", "rejectedIds", "featureChains", "detectSettings", "detection", "hiddenBodies", "candidateFilter",
@@ -16,6 +16,9 @@ const SAVED_KEYS = [
 
 type Saved = { version: number; savedAt: number; data: Partial<Store> };
 
+/**
+ * open the indexeddb session database
+ */
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, 1);
@@ -25,6 +28,9 @@ function open(): Promise<IDBDatabase> {
   });
 }
 
+/**
+ * run one indexeddb transaction and return its result
+ */
 async function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await open();
   return new Promise((resolve, reject) => {
@@ -35,34 +41,95 @@ async function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRe
   });
 }
 
+/**
+ * select the store slice that is saved between sessions
+ */
 function pick(s: Store): Partial<Store> {
   const out: Record<string, unknown> = {};
   for (const k of SAVED_KEYS) out[k] = s[k];
-  // A running detection can't be resumed: show it as not run yet.
+  
   const d = s.detection;
   if (d.status === "running") out.detection = { ...d, status: "idle" };
   return out as Partial<Store>;
 }
 
+/**
+ * check a saved session has the expected shape
+ */
+function shapeOk(data: Partial<Store>): boolean {
+  if (typeof data !== "object" || data === null) return false;
+  if (data.mesh !== undefined && data.mesh !== null && typeof data.mesh !== "object") return false;
+  if (data.seams !== undefined && !Array.isArray(data.seams)) return false;
+  if (data.procedures !== undefined && !Array.isArray(data.procedures)) return false;
+  if (data.job !== undefined && (typeof data.job !== "object" || data.job === null)) return false;
+  return true;
+}
+
+/**
+ * load the saved session, if one exists and looks valid
+ */
 export async function loadSaved(): Promise<Saved | null> {
   if (typeof indexedDB === "undefined") return null;
   try {
     const saved = await run<Saved | undefined>("readonly", (s) => s.get(KEY));
-    return saved && saved.version === VERSION && saved.data?.mesh ? saved : null;
+    if (!saved || saved.version !== VERSION || !saved.data?.mesh) return null;
+    if (!shapeOk(saved.data)) return null;
+    return saved;
   } catch {
     return null;
   }
 }
 
+/**
+ * delete the saved session from the browser
+ */
 export function clearSaved() {
   if (typeof indexedDB === "undefined") return Promise.resolve();
   return run("readwrite", (s) => s.delete(KEY)).catch(() => {});
 }
 
-// Restores the last session, then saves 700 ms after any change to the work.
+
+
+
+/**
+ * save the session, shedding bulk on quota errors
+ */
+async function saveWithFallback(s: Store, at: number): Promise<void> {
+  const full: Saved = { version: VERSION, savedAt: at, data: pick(s) };
+  try {
+    await run("readwrite", (store) => store.put(full, KEY));
+    return;
+  } catch {  }
+  const noBinary: Saved = { version: VERSION, savedAt: at, data: { ...full.data, repairedBinary: null } };
+  try {
+    await run("readwrite", (store) => store.put(noBinary, KEY));
+    return;
+  } catch {  }
+  const slim: Saved = { version: VERSION, savedAt: at, data: { ...noBinary.data, initial: null, checkpoint: null } };
+  await run("readwrite", (store) => store.put(slim, KEY));
+}
+
+
+
+let restoreEpoch = 0;
+
+/**
+ * forget the saved session and ignore late restores
+ */
+export function discardSavedSession() {
+  restoreEpoch += 1;
+  void clearSaved();
+}
+
+
+
+/**
+ * restore the saved session and autosave later changes
+ */
 export async function startPersistence() {
+  const epoch = restoreEpoch;
   const saved = await loadSaved();
-  if (saved && useStore.getState().phase === "empty") {
+  if (saved && restoreEpoch === epoch && useStore.getState().phase === "empty") {
     useStore.setState({ ...saved.data, phase: "checked", saveStatus: "saved", savedAt: saved.savedAt });
   }
 
@@ -80,7 +147,7 @@ export async function startPersistence() {
     timer = setTimeout(async () => {
       try {
         const at = Date.now();
-        await run("readwrite", (store) => store.put({ version: VERSION, savedAt: at, data: pick(useStore.getState()) } satisfies Saved, KEY));
+        await saveWithFallback(useStore.getState(), at);
         useStore.setState({ saveStatus: "saved", savedAt: at });
       } catch {
         useStore.setState({ saveStatus: "error" });

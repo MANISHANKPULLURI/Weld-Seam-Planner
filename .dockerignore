@@ -14,3 +14,10 @@ frontend/src/assets/02 Logo System
 frontend/src/assets/Armatrix_master_file.jpg
 Dockerfile
 fly.toml
+*.pem
+*.key
+*.p12
+credentials.json
+service-account*.json
+.npmrc
+.bunfig.toml

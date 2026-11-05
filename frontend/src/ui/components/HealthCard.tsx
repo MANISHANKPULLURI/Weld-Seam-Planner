@@ -6,6 +6,9 @@ import { createSampleStl } from "../../domain/mesh/sample";
 import { analyseFile, repairCurrentMesh } from "../../lib/meshClient";
 import type { Health } from "../../domain/mesh/health";
 
+/**
+ * download the repaired mesh as an STL file
+ */
 function downloadRepaired() {
   const { repairedBinary, mesh } = useStore.getState();
   let data = repairedBinary;
@@ -29,10 +32,15 @@ function downloadRepaired() {
   const el = document.createElement("a");
   el.href = url;
   el.download = "repaired.stl";
+  document.body.appendChild(el);
   el.click();
-  URL.revokeObjectURL(url);
+  el.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/**
+ * render the headline verdict for the part
+ */
 function Summary({ health }: { health: Health }) {
   const part = useStore((s) => s.part);
   return (
@@ -44,6 +52,9 @@ function Summary({ health }: { health: Health }) {
   );
 }
 
+/**
+ * render repair notes and file warnings
+ */
 function Notes({ health }: { health: Health }) {
   const warnings = useStore((s) => s.part?.warnings ?? []);
   const error = useStore((s) => s.error);
@@ -57,6 +68,9 @@ function Notes({ health }: { health: Health }) {
   );
 }
 
+/**
+ * render the per-check health table
+ */
 function Checks({ health }: { health: Health }) {
   return (
     <ul className="health-checks" aria-label="Mesh checks">
@@ -72,6 +86,9 @@ function Checks({ health }: { health: Health }) {
   );
 }
 
+/**
+ * show part health and offer repair
+ */
 export function HealthCard() {
   const health = useStore((s) => s.health);
   const originalHealth = useStore((s) => s.originalMesh?.health ?? null);

@@ -9,6 +9,9 @@ import type { SimSegment } from "./simulation.ts";
 import type { UpAxis } from "@weld/core";
 import { chooseEngineeringInterval, viewDirectionForId as viewDir, computeFitDistance as calcFitDistance } from "./viewMath.ts";
 
+/**
+ * read a theme colour from the document root
+ */
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
@@ -59,6 +62,9 @@ export class SceneController {
 
   private onViewChange?: (id: ViewId) => void;
 
+  /**
+   * create the viewer, renderer, camera and empty scene
+   */
   constructor(host: HTMLElement) {
     this.host = host;
     this.scene = new THREE.Scene();
@@ -120,6 +126,9 @@ export class SceneController {
     (this as unknown as { _cleanup: () => void })._cleanup = () => this.disposeInternal();
   }
 
+  /**
+   * set up orbit controls and their safety limits
+   */
   private configureControls() {
     this.controls.enableDamping = false;
     this.controls.dampingFactor = 0.08;
@@ -144,6 +153,9 @@ export class SceneController {
     this.controls.addEventListener("change", () => this.render());
   }
 
+  /**
+   * step through solid, wireframe and triangle views
+   */
   private cycleViewMode() {
     const order: ViewMode[] = ["solid", "wireframe", "triangles"];
     const idx = order.indexOf(this.viewMode);
@@ -151,6 +163,9 @@ export class SceneController {
   }
 
 
+  /**
+   * rebuild the ground grid to match the part size
+   */
   private buildGridForBounds(bounds: typeof this.bounds) {
     this.grid.clear();
     const maxDim = bounds ? Math.max(bounds.size.x, bounds.size.y, bounds.size.z) : 400;
@@ -173,6 +188,9 @@ export class SceneController {
     }
   }
 
+  /**
+   * rebuild the orientation axes to the part size
+   */
   private buildAxesForBounds(bounds: typeof this.bounds) {
     this.axes.clear();
     const maxDim = bounds ? Math.max(bounds.size.x, bounds.size.y, bounds.size.z) : 200;
@@ -226,6 +244,9 @@ export class SceneController {
   }
 
 
+  /**
+   * switch between perspective and orthographic cameras
+   */
   setProjection(p: "perspective" | "orthographic") {
     if (this.projection === p) return;
     const oldCam = this.camera;
@@ -244,6 +265,9 @@ export class SceneController {
     this.render();
   }
 
+  /**
+   * refit the orthographic frustum to the container
+   */
   private updateOrthoFrustum() {
     if (this.projection !== "orthographic") return;
     const aspect = this.size.w / Math.max(1, this.size.h);
@@ -270,6 +294,9 @@ export class SceneController {
   }
 
 
+  /**
+   * render the part solid, wireframe or as triangles
+   */
   setViewMode(mode: ViewMode) {
     this.viewMode = mode;
     if (!this.mesh) return;
@@ -300,10 +327,16 @@ export class SceneController {
     this.render();
   }
 
+  /**
+   * toggle the wireframe overlay on the part
+   */
   setWireframe(v: boolean) {
     this.setViewMode(v ? "wireframe" : "solid");
   }
 
+  /**
+   * refresh colours after the theme changes
+   */
   updateTheme() {
     this.seamLayer.updateTheme();
     if (this.cap) (this.cap.material as THREE.MeshBasicMaterial).color.set(cssVar("--section-cap") || "#93938D");
@@ -321,10 +354,19 @@ export class SceneController {
   }
 
 
+  /**
+   * fly the camera to a named view
+   */
   setView(id: ViewId) { this.animateToView(id); }
 
+  /**
+   * fly the camera back to the iso view
+   */
   resetView() { this.animateToView("iso"); }
 
+  /**
+   * fit the whole part into view
+   */
   fitModel(animate = true) {
     if (!this.bounds) {
       this.animateToView("iso");
@@ -343,12 +385,18 @@ export class SceneController {
     this.updateOrthoFrustum();
   }
 
+  /**
+   * measure how far the camera must sit to fit the part
+   */
   private computeFitDistance(_center: THREE.Vector3): number {
     if (!this.bounds) return 200;
     const aspect = this.size.w / Math.max(1, this.size.h);
     return calcFitDistance(this.bounds, this.cameraPersp.fov, aspect, this.projection);
   }
 
+  /**
+   * keep section clipping stable at this camera distance
+   */
   private updateClippingPlanesForDistance(distance: number) {
     if (!this.bounds) return;
     const radius = this.bounds.sphereRadius;
@@ -362,6 +410,9 @@ export class SceneController {
     this.cameraOrtho.updateProjectionMatrix();
   }
 
+  /**
+   * clip the part at the current section plane
+   */
   private updateClippingPlanes() {
     if (!this.bounds) {
       this.cameraPersp.near = 0.1; this.cameraPersp.far = 10000;
@@ -374,10 +425,16 @@ export class SceneController {
     this.updateClippingPlanesForDistance(dist);
   }
 
+  /**
+   * look up the camera direction for a named view
+   */
   private viewDirectionForId(id: ViewId, _distance: number): { dir: THREE.Vector3; up: THREE.Vector3 } {
     return viewDir(id);
   }
 
+  /**
+   * animate the camera to a named view
+   */
   private animateToView(id: ViewId) {
     const center = this.bounds ? this.bounds.center.clone() : new THREE.Vector3(0, 0, 0);
     const distance = this.bounds ? this.computeFitDistance(center) : 200;
@@ -391,6 +448,9 @@ export class SceneController {
     if (this.onViewChange) this.onViewChange(id);
   }
 
+  /**
+   * tween the camera between two poses
+   */
   private animateCamera(startPos: THREE.Vector3, endPos: THREE.Vector3, startTarget: THREE.Vector3, endTarget: THREE.Vector3, durationMs: number, endUp?: THREE.Vector3) {
     const animation = ++this.cameraAnimation;
     if (durationMs === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -433,6 +493,9 @@ export class SceneController {
   }
 
 
+  /**
+   * fit the model when the background is double-clicked
+   */
   private handleDoubleClick(e: MouseEvent) {
     const targetEl = e.target as HTMLElement;
     if (targetEl.closest(".view-controls") || targetEl.closest(".orientation-gizmo") || targetEl.closest("button")) return;
@@ -455,11 +518,17 @@ export class SceneController {
   }
 
 
+  /**
+   * return the current grid spacing in millimetres
+   */
   getGridInterval(): number { return this.gridInterval; }
 
 
-  // Geometry stays in file coordinates. The part group applies the unit scale and the up-axis
-  // rotation, so the scene, grid and camera are always in millimetres, Z up.
+  
+  
+  /**
+   * show a new mesh and rebuild its helpers
+   */
   setMesh(positions: Float32Array, indices: Uint32Array) {
     this.disposePart();
 
@@ -486,7 +555,7 @@ export class SceneController {
     this.mesh.userData.isModel = true;
     this.partGroup.add(this.mesh);
 
-    // Inside faces drawn flat behind the section plane read as the cut surface.
+    
     this.cap = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(cssVar("--section-cap") || "#93938D"), side: THREE.BackSide, clippingPlanes: this.clipping }));
     this.cap.raycast = () => {};
     this.cap.visible = this.clipping.length > 0;
@@ -508,6 +577,9 @@ export class SceneController {
     this.fitModel(false);
   }
 
+  /**
+   * scale the part to millimetres and fix its up axis
+   */
   setPartTransform(scaleToMm: number, upAxis: UpAxis, animate = true) {
     const [x, y, z, w] = UP_AXIS_QUATERNION_XYZW[upAxis];
     const sameScale = this.partGroup.scale.x === scaleToMm;
@@ -519,6 +591,9 @@ export class SceneController {
     if (this.mesh) this.fitModel(animate);
   }
 
+  /**
+   * remeasure the part bounds from its transform
+   */
   private updateBounds() {
     this.partGroup.updateMatrixWorld(true);
     if (!this.mesh) {
@@ -536,6 +611,9 @@ export class SceneController {
     this.render();
   }
 
+  /**
+   * free the part geometry and its helpers
+   */
   private disposePart() {
     this.setGhost(null);
     if (this.cap) { this.partGroup.remove(this.cap); (this.cap.material as THREE.Material).dispose(); this.cap = null; }
@@ -543,16 +621,25 @@ export class SceneController {
     if (this.triangleEdges) { this.partGroup.remove(this.triangleEdges); this.triangleEdges.geometry.dispose(); (this.triangleEdges.material as THREE.Material).dispose(); this.triangleEdges = null; }
   }
 
+  /**
+   * remove the part from the scene
+   */
   clearMesh() {
     this.disposePart();
     this.updateBounds();
   }
 
+  /**
+   * dim the part while analysis or repair runs
+   */
   setDimmed(v: boolean) {
     this.dimmed = v;
     this.applyOpacity();
   }
 
+  /**
+   * fade the part so inside seams stay visible
+   */
   setXray(on: boolean) {
     this.xray = on;
     this.seamLayer.setXray(on);
@@ -560,6 +647,9 @@ export class SceneController {
     this.applyOpacity();
   }
 
+  /**
+   * apply the dimmed and x-ray opacity to the part
+   */
   private applyOpacity() {
     if (!this.mesh) return;
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
@@ -571,8 +661,11 @@ export class SceneController {
     this.render();
   }
 
-  // Cuts the part at `offset` (0..1 of the part's extent) along a world axis. Keeps the lower side,
-  // or the upper side when flipped. Seams on the removed side are hidden and cannot be picked.
+  
+  
+  /**
+   * cut the part with a section plane, or clear the cut
+   */
   setSection(section: { axis: "x" | "y" | "z"; offset: number; flipped: boolean } | null) {
     this.clipping.length = 0;
     if (section && this.bounds) {
@@ -587,6 +680,9 @@ export class SceneController {
     this.render();
   }
 
+  /**
+   * swap which triangles of the part are drawn
+   */
   setIndices(indices: Uint32Array) {
     if (!this.mesh) return;
     const geo = this.mesh.geometry as THREE.BufferGeometry;
@@ -596,7 +692,10 @@ export class SceneController {
     this.setViewMode(this.viewMode);
   }
 
-  // Focus mode: these triangles are drawn as a faint ghost so the focused part stands out.
+  
+  /**
+   * show hidden bodies as a faint ghost, or hide it
+   */
   setGhost(indices: Uint32Array | null) {
     if (this.ghost) { this.partGroup.remove(this.ghost); this.ghost.geometry.dispose(); (this.ghost.material as THREE.Material).dispose(); this.ghost = null; }
     if (indices && indices.length && this.mesh) {
@@ -613,7 +712,10 @@ export class SceneController {
     this.render();
   }
 
-  // Frames a box given in part (file) coordinates.
+  
+  /**
+   * fit a bounding box into view
+   */
   fitBox(min: [number, number, number], max: [number, number, number], animate = true) {
     this.partGroup.updateMatrixWorld();
     const box = new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)).applyMatrix4(this.partGroup.matrixWorld);
@@ -631,16 +733,25 @@ export class SceneController {
     this.animateCamera(this.camera.position.clone(), center.clone().add(dir.multiplyScalar(distance)), this.controls.target.clone(), center, animate ? 500 : 0);
   }
 
+  /**
+   * flash edited seams and start their flow arrows
+   */
   flashSeams(ids: string[], reversed = false) {
     this.seamLayer.flashSeams(ids, reversed);
     this.startFlow();
   }
 
+  /**
+   * update the name labels shown on seams
+   */
   setSeamNames(names: Map<string, string>) {
     this.seamLayer.names = names;
   }
 
-  // Keeps the flowing direction arrows (and change flashes) animating.
+  
+  /**
+   * start the arrow animation loop if idle
+   */
   private startFlow() {
     if (this.flowRaf) return;
     let last = performance.now();
@@ -653,13 +764,19 @@ export class SceneController {
     this.flowRaf = requestAnimationFrame(tick);
   }
 
-  // Weld simulation: segments in order; progress is reported in real seconds.
+  
+  /**
+   * load weld path segments for playback
+   */
   setSimulation(segments: SimSegment[] | null, onProgress: (t: number, total: number, segment: number) => void = () => {}) {
     if (this.sim) cancelAnimationFrame(this.sim.raf);
     this.sim = segments && segments.length ? { segments, t: 0, speed: 10, playing: false, raf: 0, onProgress } : null;
     this.drawSim();
   }
 
+  /**
+   * play the weld simulation from the start if done
+   */
   simPlay(speed: number) {
     const sim = this.sim;
     if (!sim) return;
@@ -680,10 +797,22 @@ export class SceneController {
     sim.raf = requestAnimationFrame(tick);
   }
 
+  /**
+   * pause the weld simulation
+   */
   simPause() { if (this.sim) { this.sim.playing = false; cancelAnimationFrame(this.sim.raf); } }
+  /**
+   * change the weld simulation speed
+   */
   simSpeed(speed: number) { if (this.sim) this.sim.speed = speed; }
+  /**
+   * jump the weld simulation to a time
+   */
   simSeek(t: number) { if (this.sim) { this.sim.t = Math.max(0, Math.min(totalDuration(this.sim.segments), t)); this.drawSim(); } }
 
+  /**
+   * redraw the torch and welded progress for the time
+   */
   private drawSim() {
     const sim = this.sim;
     if (!sim) { this.seamLayer.setSimFrame(null, [], null); this.render(); return; }
@@ -700,48 +829,75 @@ export class SceneController {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * pass seam overlays to the seam layer
+   */
   setSeams(items: SeamDrawItem[]) {
     this.seamLayer.setSeams(items);
     this.render();
   }
 
+  /**
+   * highlight the selected and hovered seams
+   */
   setSeamHighlight(selectedId: string | null, hoverId: string | null) {
     this.seamLayer.setHighlight(selectedId, hoverId);
     this.render();
   }
 
+  /**
+   * draw the welding order overlay
+   */
   setSequence(items: { points: Float32Array; closed: boolean }[] | null) {
     this.seamLayer.setSequence(items);
     this.render();
   }
 
+  /**
+   * preview where a split would cut the seam
+   */
   setSplitPreview(pieces: { points: Float32Array; closed: boolean }[], cuts: [number, number, number][]) {
     this.seamLayer.setSplitPreview(pieces, cuts.map((c) => new THREE.Vector3(...c)));
     this.render();
   }
 
+  /**
+   * convert a world point into part coordinates
+   */
   toPart(world: THREE.Vector3): [number, number, number] {
     const v = this.partGroup.worldToLocal(world.clone());
     return [v.x, v.y, v.z];
   }
 
+  /**
+   * move the draw and split snap marker
+   */
   setSnapMarker(point: [number, number, number] | null, kind?: "end" | "corner" | "edge" | "surface" | "split") {
     this.seamLayer.setSnapMarker(point ? new THREE.Vector3(...point) : null, kind);
     this.render();
   }
 
-  // First surface hit on the side of the section that is still shown.
+  
+  /**
+   * raycast the visible part, ignoring the cut side
+   */
   private visibleHit(): THREE.Intersection | undefined {
     if (!this.mesh) return undefined;
     return this.raycaster.intersectObject(this.mesh, false).find((h) => this.clipping.every((plane) => plane.distanceToPoint(h.point) >= 0));
   }
 
+  /**
+   * preview the picked or drawn seam path
+   */
   setSeamPreview(points: Float32Array | null, closed = false) {
     this.seamLayer.setPreview(points, closed);
     this.render();
   }
 
-  // Nearest drawn seam under the cursor, ignoring seams hidden behind the part (unless X-ray is on).
+  
+  /**
+   * find the seam under the cursor, if any
+   */
   pickSeam(event: { clientX: number; clientY: number }): string | null {
     const items = this.seamLayer.drawn;
     const hit = this.pickPath(items, event);
@@ -750,6 +906,9 @@ export class SceneController {
 
   private projectionCache = new WeakMap<object, { key: string; screens: Float32Array[] }>();
 
+  /**
+   * find the path under the cursor with caching
+   */
   pickPath(paths: { points: Float32Array; closed: boolean }[], event: { clientX: number; clientY: number }, maxPixels = 8): PathHit | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const key = [...this.camera.matrixWorld.elements, ...this.camera.projectionMatrix.elements, ...this.partGroup.matrixWorld.elements, rect.width, rect.height].join(",");
@@ -762,7 +921,7 @@ export class SceneController {
       .filter((hit) => this.clipping.every((plane) => plane.distanceToPoint(hit.world) >= 0));
     if (this.xray || !this.mesh) return hits[0] ?? null;
     const slack = (this.bounds?.sphereRadius ?? 1) * 0.005;
-    // Nearest visible one: cast toward each seam point (not through the cursor beside it) and skip hidden ones.
+    
     return hits.find((hit) => {
       const ndc = hit.world.clone().project(this.camera);
       this.raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), this.camera);
@@ -771,8 +930,11 @@ export class SceneController {
     }) ?? null;
   }
 
-  // Point on the visible surface in part (file) coordinates with its outward normal, snapped like CAD:
-  // the end of an existing seam first (so seams connect), then a mesh corner, then a part edge.
+  
+  
+  /**
+   * find the surface point under the cursor with snapping
+   */
   surfacePoint(event: { clientX: number; clientY: number }, snap: { ends?: [number, number, number][]; edges?: { points: Float32Array; closed: boolean }[] } = {}): SurfacePoint | null {
     if (!this.mesh) return null;
     this.setRayFromEvent(event);
@@ -809,6 +971,9 @@ export class SceneController {
     return at(this.partGroup.worldToLocal(hit.point.clone()), null);
   }
 
+  /**
+   * aim the raycaster through the cursor position
+   */
   private setRayFromEvent(event: { clientX: number; clientY: number }) {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -816,6 +981,9 @@ export class SceneController {
     this.raycaster.setFromCamera(this.mouse, this.camera);
   }
 
+  /**
+   * fade the part in unless reduced motion is set
+   */
   fadeIn() {
     if (!this.mesh) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -837,6 +1005,9 @@ export class SceneController {
     requestAnimationFrame(step);
   }
 
+  /**
+   * resize the renderer and cameras to the container
+   */
   private resize() {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     if (w === 0 || h === 0) return;
@@ -849,6 +1020,9 @@ export class SceneController {
     this.render();
   }
 
+  /**
+   * schedule one frame of the scene
+   */
   private render() {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame(() => {
@@ -857,11 +1031,26 @@ export class SceneController {
     });
   }
 
+  /**
+   * return the active camera
+   */
   getCamera(): THREE.Camera { return this.camera; }
+  /**
+   * return the orbit controls
+   */
   getControls(): OrbitControls { return this.controls; }
+  /**
+   * return the measured part bounds
+   */
   getBounds() { return this.bounds; }
+  /**
+   * register the callback for camera view changes
+   */
   onViewChangeCallback(cb: (id: ViewId)=>void) { this.onViewChange = cb; }
 
+  /**
+   * remove listeners and free viewer resources
+   */
   private disposeInternal() {
     if (this.resizeObserver) { this.resizeObserver.disconnect(); this.resizeObserver = null; }
     if (this.onContextMenuHandler) { this.renderer.domElement.removeEventListener("contextmenu", this.onContextMenuHandler); this.onContextMenuHandler = null; }
@@ -887,6 +1076,9 @@ export class SceneController {
     }
   }
 
+  /**
+   * return the section plane in part coordinates
+   */
   sectionInPartSpace(): { normal: [number, number, number]; constant: number } | null {
     if (this.clipping.length === 0) return null;
     this.partGroup.updateMatrixWorld();
@@ -894,6 +1086,9 @@ export class SceneController {
     return { normal: plane.normal.toArray() as [number, number, number], constant: plane.constant };
   }
 
+  /**
+   * release the viewer and its resources
+   */
   dispose() {
     if ((this as unknown as { _cleanup?: () => void })._cleanup) (this as unknown as { _cleanup: () => void })._cleanup();
   }

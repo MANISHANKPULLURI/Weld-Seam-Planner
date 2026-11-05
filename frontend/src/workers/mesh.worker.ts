@@ -9,10 +9,16 @@ const scope = self as unknown as {
   postMessage: (message: MeshWorkerResponse, transfer?: Transferable[]) => void;
 };
 
+/**
+ * post a response back to the main thread
+ */
 function send(message: MeshWorkerResponse, transfer: Transferable[] = []) {
   scope.postMessage(message, transfer);
 }
 
+/**
+ * throttle progress updates for one request
+ */
 function progressReporter(id: number) {
   let lastStage: MeshStage | null = null;
   let lastFraction = -1;
@@ -24,6 +30,9 @@ function progressReporter(id: number) {
   };
 }
 
+/**
+ * turn a worker error into a readable message
+ */
 function messageOf(err: unknown): string {
   if (err instanceof MeshError) return err.message;
   if (err instanceof RangeError) return "This file is too large for the browser to hold in memory. Try a simplified export.";

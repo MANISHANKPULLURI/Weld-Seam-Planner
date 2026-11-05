@@ -5,7 +5,7 @@ import type { JointType, SeamPath } from "../seams/types.ts";
 import { arcEnergyKjMm, arcTimeS, filletSizes, seamPosition } from "./calc.ts";
 import type { Aws, Intermittent, Iso6947, WeldSize } from "./calc.ts";
 
-// Per-seam weld settings. Procedure values apply unless overridden; position null means derived.
+
 export type SeamWeld = {
   procedureId: string;
   overrides: Partial<{ voltage_v: number; current_a: number; wire_feed_speed_m_min: number; travel_speed_mm_min: number }>;
@@ -31,7 +31,10 @@ export type SeamEvaluation = {
   warnings: Issue[];
 };
 
-// A seam's starting settings come from the procedure's seam_defaults (part of the WPS).
+
+/**
+ * create default weld settings from a procedure preset
+ */
 export function defaultWeld(procedure: Procedure): SeamWeld {
   const d = procedure.seam_defaults;
   return {
@@ -47,6 +50,9 @@ const ISO_TO_AWS: Record<Iso6947, { fillet: Aws; groove: Aws }> = {
   PG: { fillet: "3F", groove: "3G" }, inclined: { fillet: "inclined", groove: "inclined" },
 };
 
+/**
+ * evaluate a seam against procedures to compute energy, time and warnings
+ */
 export function evaluateSeam(seam: WeldableSeam, procedures: Procedure[], units: Units, upAxis: UpAxis): SeamEvaluation | null {
   const w = seam.weld;
   if (!w) return null;

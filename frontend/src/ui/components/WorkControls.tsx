@@ -2,8 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../../state/store";
 import { SaveIcon, RefreshIcon } from "../icons";
 
+/**
+ * format a timestamp as hours and minutes
+ */
 const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+/**
+ * checkpoint, restore and show save state
+ */
 export function WorkControls() {
   const ready = useStore((s) => s.initial !== null && (s.phase === "checked" || s.phase === "error"));
   const checkpoint = useStore((s) => s.checkpoint);
@@ -58,6 +64,9 @@ export function WorkControls() {
   );
 }
 
+/**
+ * show whether the work is saved yet
+ */
 export function SaveStatusLine() {
   const ready = useStore((s) => s.initial !== null && (s.phase === "checked" || s.phase === "error"));
   const saveStatus = useStore((s) => s.saveStatus);

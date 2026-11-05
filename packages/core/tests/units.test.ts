@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { guessUnits, guessUpAxis, partSizeMm } from "../src/index.ts";
 
+/**
+ * make a vec3-like size object for unit tests
+ */
 const size = (x: number, y: number, z: number) => ({ x, y, z });
 
 describe("guessUnits", () => {

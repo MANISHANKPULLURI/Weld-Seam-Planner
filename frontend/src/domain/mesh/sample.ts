@@ -15,6 +15,9 @@ const CUBE: readonly (readonly [P, P, P])[] = [
   [[0, 0, 0], [10, 0, 0], [10, 0, 10]],
 ];
 
+/**
+ * build a small cube STL for local testing
+ */
 export function createSampleStl(): ArrayBuffer {
   const count = CUBE.length;
   const buf = new ArrayBuffer(84 + count * 50);

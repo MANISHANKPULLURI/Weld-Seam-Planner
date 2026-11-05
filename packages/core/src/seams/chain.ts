@@ -9,9 +9,12 @@ export type Segment = {
 
 const CORNER_DEG = 35;
 
-// Joins segments that share end points into polylines, breaking at junctions and at sharp turns.
-// shortcut: the turn test is per vertex, so very coarse arcs (8 segments per circle) split at every
-// vertex; measure the turn over a 2-3 mm window if that shows up on real parts.
+
+
+
+/**
+ * chain segments into continuous seam paths by spatial tolerance
+ */
 export function chainSegments(segments: Segment[], tolerance: number): SeamPath[] {
 
   const keyOf = (p: [number, number, number]) => `${Math.round(p[0] / tolerance)},${Math.round(p[1] / tolerance)},${Math.round(p[2] / tolerance)}`;
@@ -85,6 +88,9 @@ export function chainSegments(segments: Segment[], tolerance: number): SeamPath[
 }
 
 
+/**
+ * build a seam path with points, normals and length from chained nodes
+ */
 function toPath(nodes: number[], segs: number[], nodePoints: [number, number, number][], segments: Segment[], closed: boolean): SeamPath {
 
   const count = closed ? nodes.length - 1 : nodes.length;
@@ -108,18 +114,30 @@ function toPath(nodes: number[], segs: number[], nodePoints: [number, number, nu
   return { points, normalsA, normalsB, closed, length };
 }
 
+/**
+ * subtract two 3d vectors element-wise
+ */
 export function sub(a: number[], b: number[]): [number, number, number] {
   return [a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!];
 }
 
+/**
+ * compute dot product of two vectors
+ */
 export function dot(a: number[], b: number[]): number {
   return a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
 }
 
+/**
+ * compute euclidean length of a vector
+ */
 export function len(a: number[]): number {
   return Math.hypot(a[0]!, a[1]!, a[2]!);
 }
 
+/**
+ * normalize a vector to unit length safely
+ */
 export function normalize(a: number[]): [number, number, number] {
   const l = len(a) || 1;
   return [a[0]! / l, a[1]! / l, a[2]! / l];

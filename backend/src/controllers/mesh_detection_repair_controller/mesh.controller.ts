@@ -1,20 +1,22 @@
-import { Hono } from "hono";
-import type { Context } from "hono";
+import type { Context, Env } from "hono";
 import { z } from "zod";
-import { MeshError, analyseMesh, repairMesh, writeBinaryStl } from "@weld/core";
+import { analyseMesh, repairMesh, writeBinaryStl } from "@weld/core";
 import type { AnalysedMesh } from "@weld/core";
 import { mkdir, writeFile, readFile, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { config } from "../../config.ts";
+import { CHUNK_BYTES as SHARED_CHUNK_BYTES, UPLOAD_SWEEP_INTERVAL_MS } from "../../constants.ts";
 
 
-export const MAX_FILE_BYTES = Number(process.env.MAX_FILE_MB || 500) * 1024 * 1024;
-export const CHUNK_BYTES = 5 * 1024 * 1024;
-export const UPLOAD_DIR = process.env.UPLOAD_DIR || join(tmpdir(), "weld-uploads");
+export const MAX_FILE_BYTES = config.maxFileBytes;
 
-const UPLOAD_TTL_MS = Number(process.env.UPLOAD_TTL_MIN || 30) * 60 * 1000;
-const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
+export const CHUNK_BYTES: number = SHARED_CHUNK_BYTES;
+export const UPLOAD_DIR = config.uploadDir;
+
+const UPLOAD_TTL_MS = config.uploadTtlMs;
+const SWEEP_INTERVAL_MS = UPLOAD_SWEEP_INTERVAL_MS;
 const UPLOAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CHUNK_INDEX_PATTERN = /^\d{1,6}$/;
 
@@ -22,14 +24,18 @@ const toleranceSchema = z.coerce.number().min(1e-9).max(1e-2).optional();
 
 type UploadMeta = { fileSize: number; totalChunks: number; createdAt: number };
 
-export const meshRoutes = new Hono();
 
-
+/**
+ * build file-too-large error message
+ */
 function tooLarge() {
   return `File too large. Max ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB.`;
 }
 
 
+/**
+ * read mesh bytes from multipart or raw body
+ */
 async function readMeshBody(c: Context): Promise<ArrayBuffer | Response> {
 
   const contentType = c.req.header("content-type") || "";
@@ -55,7 +61,10 @@ async function readMeshBody(c: Context): Promise<ArrayBuffer | Response> {
 }
 
 
-// undefined means "use the size-relative default"; null means the query value was invalid.
+/**
+ * undefined means "use the size-relative default"; null means the query value was invalid.
+ * parse optional tolerance query param
+ */
 function readTolerance(c: Context): number | undefined | null {
 
   const parsed = toleranceSchema.safeParse(c.req.query("tolerance"));
@@ -64,11 +73,17 @@ function readTolerance(c: Context): number | undefined | null {
 }
 
 
+/**
+ * analyse mesh and return health report
+ */
 function runValidation(buffer: ArrayBuffer, tolerance: number | undefined) {
   return analyseMesh(buffer, { tolerance });
 }
 
 
+/**
+ * analyse mesh and build repaired result
+ */
 function runRepair(buffer: ArrayBuffer, tolerance: number | undefined) {
   const analysed = analyseMesh(buffer, { tolerance });
   const repaired = repairMesh(analysed.vertices, analysed.orientedIndices, analysed.health);
@@ -76,14 +91,20 @@ function runRepair(buffer: ArrayBuffer, tolerance: number | undefined) {
 }
 
 
+/**
+ * log mesh error and return fallback response
+ */
 function meshErrorResponse(c: Context, err: unknown, fallback: string) {
 
-  if (err instanceof MeshError || err instanceof Error) return c.json({ error: err.message }, 422);
+  console.error(`mesh ${c.req.path} failed:`, err);
 
   return c.json({ error: fallback }, 422);
 }
 
 
+/**
+ * shape analysed mesh into validate response
+ */
 function validationBody(result: AnalysedMesh) {
   return {
     health: result.health,
@@ -99,6 +120,9 @@ function validationBody(result: AnalysedMesh) {
 }
 
 
+/**
+ * shape repaired mesh into repair response
+ */
 function repairBody(result: ReturnType<typeof runRepair>) {
   return {
     health: result.repaired.health,
@@ -114,7 +138,16 @@ function repairBody(result: ReturnType<typeof runRepair>) {
 }
 
 
-meshRoutes.post("/validate", async (c) => {
+/**
+ * Shared preamble for /validate, /repair and /repair/binary: tolerance parsing,
+ * body loading, and generic (non-leaking) error mapping.
+ * load tolerance and body then run mesh handler
+ */
+async function withMesh(
+  c: Context,
+  fallback: string,
+  handle: (buffer: ArrayBuffer, tolerance: number | undefined) => Response | Promise<Response>,
+): Promise<Response> {
 
   const tolerance = readTolerance(c);
   if (tolerance === null) return c.json({ error: "Invalid tolerance" }, 400);
@@ -123,38 +156,34 @@ meshRoutes.post("/validate", async (c) => {
   if (buffer instanceof Response) return buffer;
 
   try {
-    return c.json(validationBody(runValidation(buffer, tolerance)));
+    return await handle(buffer, tolerance);
   } catch (err) {
-    return meshErrorResponse(c, err, "Invalid mesh");
+    return meshErrorResponse(c, err, fallback);
   }
-});
+}
 
 
-meshRoutes.post("/repair", async (c) => {
-
-  const tolerance = readTolerance(c);
-  if (tolerance === null) return c.json({ error: "Invalid tolerance" }, 400);
-
-  const buffer = await readMeshBody(c);
-  if (buffer instanceof Response) return buffer;
-
-  try {
-    return c.json(repairBody(runRepair(buffer, tolerance)));
-  } catch (err) {
-    return meshErrorResponse(c, err, "Repair failed");
-  }
-});
+/**
+ * handle POST mesh validate request
+ */
+export async function handleValidateMesh(c: Context): Promise<Response> {
+  return withMesh(c, "Invalid mesh", (buffer, tolerance) => c.json(validationBody(runValidation(buffer, tolerance))));
+}
 
 
-meshRoutes.post("/repair/binary", async (c) => {
+/**
+ * handle POST mesh repair request
+ */
+export async function handleRepairMesh(c: Context): Promise<Response> {
+  return withMesh(c, "Repair failed", (buffer, tolerance) => c.json(repairBody(runRepair(buffer, tolerance))));
+}
 
-  const tolerance = readTolerance(c);
-  if (tolerance === null) return c.json({ error: "Invalid tolerance" }, 400);
 
-  const buffer = await readMeshBody(c);
-  if (buffer instanceof Response) return buffer;
-
-  try {
+/**
+ * handle POST mesh repair binary download
+ */
+export async function handleRepairMeshBinary(c: Context): Promise<Response> {
+  return withMesh(c, "Repair failed", (buffer, tolerance) => {
 
     const result = runRepair(buffer, tolerance);
 
@@ -164,24 +193,34 @@ meshRoutes.post("/repair/binary", async (c) => {
         "Content-Disposition": 'attachment; filename="repaired.stl"',
       },
     });
+  });
+}
 
-  } catch (err) {
-    return meshErrorResponse(c, err, "Repair failed");
-  }
+
+const uploadMetaSchema = z.object({
+  fileSize: z.number().int().positive().max(MAX_FILE_BYTES),
+  totalChunks: z.number().int().positive().max(Math.ceil(MAX_FILE_BYTES / CHUNK_BYTES) + 1),
+  createdAt: z.number().finite(),
 });
 
-
+/**
+ * read and validate chunked upload metadata
+ */
 async function readUploadMeta(id: string): Promise<UploadMeta | null> {
 
   try {
-    return JSON.parse(await readFile(join(UPLOAD_DIR, id, "meta.json"), "utf-8")) as UploadMeta;
+    const parsed = uploadMetaSchema.safeParse(JSON.parse(await readFile(join(UPLOAD_DIR, id, "meta.json"), "utf-8")));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
 }
 
 
-meshRoutes.post("/upload/init", async (c) => {
+/**
+ * handle chunked upload initialisation
+ */
+export async function handleUploadInit(c: Context): Promise<Response> {
 
   const body = await c.req.json().catch(() => null) as { fileName?: string; fileSize?: number } | null;
 
@@ -197,11 +236,14 @@ meshRoutes.post("/upload/init", async (c) => {
   await mkdir(join(UPLOAD_DIR, uploadId), { recursive: true });
   await writeFile(join(UPLOAD_DIR, uploadId, "meta.json"), JSON.stringify(meta));
 
-  return c.json({ uploadId, chunkSize: CHUNK_BYTES });
-});
+  return c.json({ uploadId, chunkSize: CHUNK_BYTES, expiresAt: meta.createdAt + UPLOAD_TTL_MS });
+}
 
 
-meshRoutes.post("/upload/:id/chunk", async (c) => {
+/**
+ * handle single chunked upload part
+ */
+export async function handleUploadChunk(c: Context<Env, "/upload/:id/chunk">): Promise<Response> {
 
   const id = c.req.param("id");
   const indexParam = c.req.query("index") ?? "";
@@ -215,18 +257,29 @@ meshRoutes.post("/upload/:id/chunk", async (c) => {
   const index = Number(indexParam);
   if (index >= meta.totalChunks) return c.json({ error: "Invalid chunk index" }, 400);
 
+  const partPath = join(UPLOAD_DIR, id, `${index}.part`);
+
+  if (await stat(partPath).then(() => true).catch(() => false)) {
+    return c.json({ error: "Chunk already received" }, 409);
+  }
+
   const chunk = await c.req.arrayBuffer();
 
   if (chunk.byteLength === 0) return c.json({ error: "Empty chunk" }, 400);
-  if (chunk.byteLength > CHUNK_BYTES) return c.json({ error: "Chunk too large" }, 413);
 
-  await writeFile(join(UPLOAD_DIR, id, `${index}.part`), Buffer.from(chunk));
+  const expectedSize = index < meta.totalChunks - 1 ? CHUNK_BYTES : meta.fileSize - index * CHUNK_BYTES;
+  if (chunk.byteLength !== expectedSize) return c.json({ error: "Invalid chunk size" }, 400);
+
+  await writeFile(partPath, Buffer.from(chunk));
 
   return c.json({ ok: true, index });
-});
+}
 
 
-meshRoutes.post("/upload/:id/complete", async (c) => {
+/**
+ * assemble chunks and validate or repair
+ */
+export async function handleCompleteUpload(c: Context<Env, "/upload/:id/complete">): Promise<Response> {
 
   const id = c.req.param("id");
   const mode = c.req.query("mode") || "validate";
@@ -247,6 +300,7 @@ meshRoutes.post("/upload/:id/complete", async (c) => {
     try {
       buffers.push(await readFile(join(dir, `${i}.part`)));
     } catch {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
       return c.json({ error: `Missing chunk ${i}` }, 400);
     }
   }
@@ -268,9 +322,12 @@ meshRoutes.post("/upload/:id/complete", async (c) => {
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
-});
+}
 
 
+/**
+ * remove expired chunked upload directories
+ */
 export async function sweepExpiredUploads(now = Date.now(), ttlMs = UPLOAD_TTL_MS) {
 
   let removed = 0;

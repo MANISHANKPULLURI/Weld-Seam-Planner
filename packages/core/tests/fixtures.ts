@@ -17,11 +17,17 @@ export const OUTWARD_CUBE: Tri[] = [
 ];
 
 
+/**
+ * reverse winding order of a triangle
+ */
 export function reversed(tri: Tri): Tri {
   return [tri[0], tri[2], tri[1]];
 }
 
 
+/**
+ * build axis-aligned box triangles between two corners
+ */
 export function box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Tri[] {
   return OUTWARD_CUBE.map((tri) => tri.map(([x, y, z]) => [
     x === 0 ? x0 : x1,
@@ -31,7 +37,10 @@ export function box(x0: number, y0: number, z0: number, x1: number, y1: number, 
 }
 
 
-// Extrudes a simple polygon drawn in the XZ plane along Y. Winding is left to analyseMesh to fix.
+
+/**
+ * extrude a 2d outline into a prism of given length
+ */
 export function prism(outline: [number, number][], length: number): Tri[] {
   const tris: Tri[] = [];
   for (const [i, j, k] of earClip(outline)) {
@@ -46,6 +55,9 @@ export function prism(outline: [number, number][], length: number): Tri[] {
   return tris;
 }
 
+/**
+ * triangulate a polygon outline with ear clipping
+ */
 function earClip(poly: [number, number][]): [number, number, number][] {
   const idx = poly.map((_, i) => i);
   const area = poly.reduce((s, p, i) => s + p[0] * poly[(i + 1) % poly.length]![1] - poly[(i + 1) % poly.length]![0] * p[1], 0);
@@ -71,6 +83,9 @@ function earClip(poly: [number, number][]): [number, number, number][] {
 }
 
 
+/**
+ * serialize triangles to an ascii stl string
+ */
 export function asciiStl(tris: Tri[], name = "part"): string {
   const lines = [`solid ${name}`];
   for (const t of tris) {
@@ -83,12 +98,18 @@ export function asciiStl(tris: Tri[], name = "part"): string {
 }
 
 
+/**
+ * build deduplicated vertices and uint32 indices from triangles
+ */
 export function indexed(tris: Tri[]) {
   const { vertices, indices } = indexedMesh(tris);
   return { vertices, indices: new Uint32Array(indices) };
 }
 
 
+/**
+ * encode triangles into a binary stl buffer
+ */
 export function binaryStl(tris: Tri[]): ArrayBuffer {
 
   const buffer = new ArrayBuffer(84 + tris.length * 50);
@@ -116,6 +137,9 @@ export function binaryStl(tris: Tri[]): ArrayBuffer {
 }
 
 
+/**
+ * build shared vertices and integer indices from triangles
+ */
 export function indexedMesh(tris: Tri[]) {
 
   const vertices: number[] = [];
@@ -139,6 +163,9 @@ export function indexedMesh(tris: Tri[]) {
 }
 
 
+/**
+ * compute signed volume of an indexed triangle mesh
+ */
 export function signedVolume(vertices: Float32Array, indices: Int32Array) {
 
   let volume = 0;

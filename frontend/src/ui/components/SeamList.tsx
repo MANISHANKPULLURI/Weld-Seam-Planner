@@ -3,16 +3,11 @@ import { candidateVisible, inWorkArea, seamLengthMm, useStore } from "../../stat
 import type { SeamSource } from "@weld/core";
 import type { Seam } from "../../state/store";
 import { CheckIcon, XIcon } from "../icons";
+import { JOINT_HELP, JOINT_LABEL, MANUAL } from "../labels";
 
-const JOINT_LABEL: Record<Seam["jointType"], string> = { fillet: "Fillet weld", butt: "Butt weld", corner: "Corner weld", unknown: "Weld" };
-const MANUAL: Partial<Record<Seam["source"], string>> = { edge_chain: "Picked edge", drawn: "Drawn by hand" };
-export const JOINT_HELP: Record<Seam["jointType"], string> = {
-  fillet: "Fillet weld: a triangle-shaped weld filling the inside corner where two plates meet (T or L shape). The most common weld.",
-  butt: "Butt weld: joins two plates lying edge to edge in the same plane.",
-  corner: "Corner weld: joins two plates at their outside corner, like the edge of a box.",
-  unknown: "Added by you, so the joint type is not known.",
-};
-
+/**
+ * render one candidate row with accept and reject
+ */
 function SeamRow({ seam }: { seam: Seam }) {
   const units = useStore((s) => s.frame.units);
   const selected = useStore((s) => s.selectedSeamId === seam.id);
@@ -42,6 +37,9 @@ function SeamRow({ seam }: { seam: Seam }) {
 
 const SOURCE_CHIP: Partial<Record<SeamSource, string>> = { inside_corner: "Inside corners", contact: "Plates touch", intersection: "Intersections", outside_corner: "Outside corners" };
 
+/**
+ * list candidates and kept seams with filters
+ */
 export function SeamList() {
   const everySeam = useStore((s) => s.seams);
   const workArea = useStore((s) => s.workArea);
@@ -54,6 +52,9 @@ export function SeamList() {
   const accepted = seams.filter((s) => s.status === "accepted");
   const sources = (Object.keys(SOURCE_CHIP) as SeamSource[]).map((source) => ({ source, count: allCandidates.filter((c) => c.source === source).length })).filter((x) => x.count > 0);
 
+  /**
+   * hide or show one candidate source
+   */
   const toggle = (source: SeamSource) => setCandidateFilter({ hidden: filter.hidden.includes(source) ? filter.hidden.filter((x) => x !== source) : [...filter.hidden, source] });
 
   return (

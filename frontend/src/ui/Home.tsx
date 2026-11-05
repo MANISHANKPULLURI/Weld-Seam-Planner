@@ -1,9 +1,40 @@
+import { useEffect, useState } from "react";
 import { useStore } from "../state/store";
+import { discardSavedSession, loadSaved } from "../lib/persist";
 import { Logo } from "./Logo";
 import { LockIcon } from "./icons";
 
+type SavedSession = { fileName: string; savedAt: number } | null;
+
+/**
+ * render the landing page and saved-session resume
+ */
 export function Home() {
-  const savedPart = useStore((st) => (st.phase === "checked" ? st.part?.fileName ?? null : null));
+  const [savedSession, setSavedSession] = useState<SavedSession | undefined>(undefined);
+
+  useEffect(() => {
+    let live = true;
+    void loadSaved().then((saved) => {
+      if (!live) return;
+      const fileName = saved?.data?.part?.fileName;
+      setSavedSession(fileName ? { fileName, savedAt: saved.savedAt } : null);
+    });
+    return () => { live = false; };
+  }, []);
+
+  /**
+   * discard the saved session and start a blank project
+   */
+  const startNew = () => {
+    
+    
+    discardSavedSession();
+    useStore.getState().loadAnother();
+    location.hash = "#/planner";
+  };
+  /**
+   * switch between dark and light themes
+   */
   const toggle = () => {
     const cur = document.documentElement.getAttribute("data-theme") || "dark";
     const next = cur === "dark" ? "light" : "dark";
@@ -23,7 +54,18 @@ export function Home() {
         <div className="home-column">
           <h1 className="home-title">Plan robotic welds from a 3D part</h1>
           <p className="home-subtitle">Load an STL, pick the seams, set how each one is welded, and export a job a robot controller can read.</p>
-          <a href="#/planner" className="home-cta">{savedPart ? `Continue ${savedPart}` : "Open the planner"}</a>
+          <div className="home-cta-row">
+            {savedSession === undefined ? (
+              <span className="home-cta" aria-disabled="true">Open the planner</span>
+            ) : savedSession ? (
+              <>
+                <button type="button" className="home-cta" onClick={startNew}>Start new project</button>
+                <a href="#/planner" className="home-continue">Continue {savedSession.fileName}</a>
+              </>
+            ) : (
+              <a href="#/planner" className="home-cta">Open the planner</a>
+            )}
+          </div>
           <div className="home-steps">
             <div className="home-step">
               <span className="home-step-num">1</span>

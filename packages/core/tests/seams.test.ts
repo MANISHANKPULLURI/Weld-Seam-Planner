@@ -4,11 +4,17 @@ import type { DetectOptions, SeamCandidate } from "../src/index.ts";
 import { binaryStl, box, prism } from "./fixtures.ts";
 import type { Tri } from "./fixtures.ts";
 
+/**
+ * analyse triangles and detect seams with merged options
+ */
 function detect(tris: Tri[], options: Partial<DetectOptions> = {}) {
   const m = analyseMesh(binaryStl(tris));
   return detectSeams(m.vertices, m.orientedIndices, m.bodyOfTriangle, { ...DEFAULT_DETECT_OPTIONS, ...options });
 }
 
+/**
+ * map candidates to sorted rounded lengths for assertions
+ */
 const lengths = (cs: SeamCandidate[]) => cs.map((c) => Math.round(c.length)).sort((a, b) => a - b);
 
 const T_OUTLINE: [number, number][] = [[0, 0], [100, 0], [100, 10], [55, 10], [55, 60], [45, 60], [45, 10], [0, 10]];

@@ -7,11 +7,17 @@ export type SeamDrawItem = { id: string; points: Float32Array; closed: boolean; 
 
 export type PathHit = { index: number; segment: number; t: number; pixels: number; world: THREE.Vector3 };
 
+/**
+ * read a theme colour, falling back when unset
+ */
 function cssVar(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
-// A round badge with a number, always facing the camera at a fixed pixel size.
+
+/**
+ * draw a numbered badge sprite for a sequence step
+ */
 function numberSprite(text: string, color: string): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 64;
@@ -30,7 +36,9 @@ function numberSprite(text: string, color: string): THREE.Sprite {
   return sprite;
 }
 
-// A name tag (e.g. "S5") in the seam's colour, fixed pixel size.
+/**
+ * draw a small label sprite in the seam colour
+ */
 function textSprite(text: string, color: string): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = 128; canvas.height = 64;
@@ -52,6 +60,9 @@ function textSprite(text: string, color: string): THREE.Sprite {
   return sprite;
 }
 
+/**
+ * expand a polyline into segment endpoint pairs
+ */
 function segmentPositions(points: Float32Array, closed: boolean): Float32Array {
   const n = points.length / 3;
   const segments = closed ? n : n - 1;
@@ -64,9 +75,6 @@ function segmentPositions(points: Float32Array, closed: boolean): Float32Array {
   return out;
 }
 
-// Seam overlays live in the part group, so they share the part's unit scale and up-axis rotation.
-// shortcut: one draw call per seam; batch candidates into one LineSegments2 if parts with
-// thousands of candidates feel slow.
 export class SeamLayer {
   readonly group = new THREE.Group();
   private lines = new Map<string, LineSegments2>();
@@ -75,9 +83,7 @@ export class SeamLayer {
   private selectedId: string | null = null;
   private hoverId: string | null = null;
   private xray = false;
-  // Shared with the part's section plane, so seams on the cut-away side are hidden too.
   clipping: THREE.Plane[] = [];
-  // Arrowhead size in part units, set from the part's size.
   markerSize = 1;
   private markers = new THREE.Group();
   private ends: THREE.InstancedMesh | null = null;
@@ -95,6 +101,9 @@ export class SeamLayer {
   private simDone = new Map<number, LineSegments2>();
   private simPartial: LineSegments2 | null = null;
 
+  /**
+   * create the seam overlay group and its helpers
+   */
   constructor() {
     this.group.add(this.markers);
     this.group.add(this.splitGroup);
@@ -104,6 +113,9 @@ export class SeamLayer {
     this.group.add(this.simGroup);
   }
 
+  /**
+   * replace the drawn seams and refresh their markers
+   */
   setSeams(items: SeamDrawItem[]) {
     for (const line of this.lines.values()) this.disposeLine(line);
     this.lines.clear();
@@ -119,7 +131,9 @@ export class SeamLayer {
     this.restyle();
   }
 
-  // Dots at both ends of every accepted seam: where seams join, and where a split cut one in two.
+  /**
+   * mark both ends of every accepted seam, even split ones
+   */
   private updateEnds() {
     if (this.ends) { this.group.remove(this.ends); this.ends.geometry.dispose(); (this.ends.material as THREE.Material).dispose(); this.ends = null; }
     const open = this.items.filter((x) => x.status === "accepted" && !x.closed && x.points.length >= 6);
@@ -140,8 +154,9 @@ export class SeamLayer {
     this.group.add(this.ends);
   }
 
-  // Welding order on the part: a numbered badge at each seam's start, an arrow at its end, and a
-  // dashed line for the air move to the next seam.
+  /**
+   * show weld order: numbered starts, arrows and air moves
+   */
   setSequence(items: { points: Float32Array; closed: boolean }[] | null) {
     for (const child of [...this.sequenceGroup.children]) {
       this.sequenceGroup.remove(child);
@@ -188,7 +203,9 @@ export class SeamLayer {
     }
   }
 
-  // Weld simulation: a torch at the pose, finished seams glowing, the current seam glowing up to the torch.
+  /**
+   * draw the torch, finished seams and current progress
+   */
   setSimFrame(pose: { point: [number, number, number]; axis: [number, number, number]; welding: boolean } | null, done: { key: number; points: Float32Array; closed: boolean }[], partial: Float32Array | null) {
     if (!pose) { this.clearSim(); return; }
     const hot = cssVar("--discovery-t4", "#E9B475");
@@ -206,7 +223,6 @@ export class SeamLayer {
       this.simGroup.add(this.simTorch);
     }
     this.simTorch.position.set(...pose.point);
-    // Torch points along -axis (from the torch into the weld): local +y is "up the torch".
     this.simTorch.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...pose.axis).negate());
     const arc = this.simTorch.getObjectByName("arc")!;
     arc.visible = pose.welding;
@@ -230,6 +246,9 @@ export class SeamLayer {
     }
   }
 
+  /**
+   * remove every simulation drawing from the scene
+   */
   private clearSim() {
     for (const child of [...this.simGroup.children]) this.simGroup.remove(child);
     this.simTorch?.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); } });
@@ -238,7 +257,9 @@ export class SeamLayer {
     this.simTorch = null; this.simDone.clear(); this.simPartial = null;
   }
 
-  // Split preview: alternate pieces in a second colour, a ring-like dot at every cut.
+  /**
+   * preview split pieces in two colours with dots at cuts
+   */
   setSplitPreview(pieces: { points: Float32Array; closed: boolean }[], cuts: THREE.Vector3[]) {
     for (const child of [...this.splitGroup.children]) {
       this.splitGroup.remove(child);
@@ -263,7 +284,9 @@ export class SeamLayer {
     }
   }
 
-  // A marker under the cursor: where Draw will put the next point, or where Split will cut.
+  /**
+   * mark where draw or split will place the next point
+   */
   setSnapMarker(point: THREE.Vector3 | null, kind: "end" | "corner" | "edge" | "surface" | "split" = "surface") {
     if (this.snap) { this.group.remove(this.snap); this.snap.geometry.dispose(); (this.snap.material as THREE.Material).dispose(); this.snap = null; }
     if (!point) return;
@@ -275,17 +298,26 @@ export class SeamLayer {
     this.group.add(this.snap);
   }
 
+  /**
+   * highlight the selected and hovered seams
+   */
   setHighlight(selectedId: string | null, hoverId: string | null) {
     this.selectedId = selectedId;
     this.hoverId = hoverId;
     this.restyle();
   }
 
+  /**
+   * dim seams for x-ray mode and restyle them
+   */
   setXray(on: boolean) {
     this.xray = on;
     this.restyle();
   }
 
+  /**
+   * show the in-progress picked or drawn seam
+   */
   setPreview(points: Float32Array | null, closed = false) {
     if (this.preview) { this.disposeLine(this.preview); this.preview = null; }
     if (!points || points.length < 6) return;
@@ -298,11 +330,16 @@ export class SeamLayer {
     this.group.add(this.preview);
   }
 
+  /**
+   * restyle seams after the theme changes
+   */
   updateTheme() {
     this.restyle();
   }
 
-  // Screen positions (x, y, depth) of every path point; reused until the camera or paths change.
+  /**
+   * project path points to screen pixels for picking
+   */
   static project(paths: { points: Float32Array }[], partMatrix: THREE.Matrix4, camera: THREE.Camera, size: { w: number; h: number }): Float32Array[] {
     const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(partMatrix);
     const e = m.elements;
@@ -319,7 +356,9 @@ export class SeamLayer {
     });
   }
 
-  // Paths within `maxPixels` of the cursor, nearest first, one hit per path (world = part-space point on the path).
+  /**
+   * find paths near the cursor, nearest first
+   */
   static pick(paths: { points: Float32Array; closed: boolean }[], screens: Float32Array[], partMatrix: THREE.Matrix4, px: number, py: number, maxPixels: number): PathHit[] {
     const hits: PathHit[] = [];
     paths.forEach((path, index) => {
@@ -343,10 +382,16 @@ export class SeamLayer {
     return hits.sort((p, q) => p.pixels - q.pixels);
   }
 
+  /**
+   * return the currently drawn seams
+   */
   get drawn(): SeamDrawItem[] {
     return this.items;
   }
 
+  /**
+   * build a thick line object from a point path
+   */
   private makeLine(points: Float32Array, closed: boolean): LineSegments2 {
     const geometry = new LineSegmentsGeometry();
     geometry.setPositions(segmentPositions(points, closed));
@@ -357,8 +402,9 @@ export class SeamLayer {
     return line;
   }
 
-  // The selected seam shows its weld direction: a dot where it starts, an arrowhead where it ends.
-  // Small arrows that travel along the selected seam in its weld direction.
+  /**
+   * draw travelling arrows along the selected seam
+   */
   private updateFlow(color: string) {
     const current = this.items.find((x) => x.id === this.selectedId) ?? null;
     if ((current?.points ?? null) === this.flowKey) return;
@@ -392,8 +438,9 @@ export class SeamLayer {
     this.tickFlow(0);
   }
 
-  // The seams just changed (split pieces, merged or reversed seam) pulse thick for a moment.
-  // After an edit: changed seams pulse and show their names; a reversed seam's arrows run briefly.
+  /**
+   * pulse changed seams and briefly show their names
+   */
   flashSeams(ids: string[], reversed = false) {
     this.flash = ids.length ? { ids: new Set(ids), t: 0 } : null;
     if (reversed) this.flowSeconds = 1.6;
@@ -413,6 +460,9 @@ export class SeamLayer {
 
   names = new Map<string, string>();
 
+  /**
+   * remove the seam name labels from the scene
+   */
   private clearLabels() {
     for (const child of [...this.labelGroup.children]) {
       this.labelGroup.remove(child);
@@ -422,6 +472,9 @@ export class SeamLayer {
     }
   }
 
+  /**
+   * advance the changed-seam flash; false when finished
+   */
   private tickFlash(dt: number): boolean {
     const fl = this.flash;
     if (!fl) return false;
@@ -437,7 +490,9 @@ export class SeamLayer {
     return true;
   }
 
-  // Moves the arrows (and any flash); returns false when there is nothing to animate.
+  /**
+   * move the direction arrows; false when nothing animates
+   */
   tickFlow(dt: number): boolean {
     const flashing = this.tickFlash(dt);
     const f = this.flow;
@@ -463,6 +518,9 @@ export class SeamLayer {
     return flashing || this.flowSeconds > 0;
   }
 
+  /**
+   * refresh the seam start and end markers
+   */
   private updateMarkers(color: string) {
     for (const child of [...this.markers.children]) {
       this.markers.remove(child);
@@ -491,6 +549,9 @@ export class SeamLayer {
     for (const marker of [dot, cone]) { marker.renderOrder = 30; this.markers.add(marker); }
   }
 
+  /**
+   * recolour all seams for selection, hover and x-ray
+   */
   private restyle() {
     const candidate = cssVar("--seam-candidate", "#ABABA5");
     const accepted = cssVar("--seam-accepted", "#628047");
@@ -506,7 +567,6 @@ export class SeamLayer {
       m.color.set(isSelected ? selected : isHover ? hover : item.status === "accepted" ? item.color ?? accepted : candidate);
       m.linewidth = isSelected || isHover ? 6 : item.status === "accepted" ? 4 : 2.5;
       m.dashed = item.status === "candidate" && !isSelected;
-      // The selected seam is drawn over the part so it can always be seen, even inside a corner.
       m.depthTest = !this.xray && !isSelected;
       m.transparent = this.xray;
       m.needsUpdate = true;
@@ -516,6 +576,9 @@ export class SeamLayer {
     this.updateFlow(cssVar("--light-sand", "#F6F6EE"));
   }
 
+  /**
+   * free a line object and its geometry
+   */
   private disposeLine(line: LineSegments2) {
     this.group.remove(line);
     line.geometry.dispose();

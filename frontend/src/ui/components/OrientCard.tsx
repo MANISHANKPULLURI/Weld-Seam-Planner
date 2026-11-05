@@ -6,6 +6,9 @@ import { CheckIcon } from "../icons";
 
 const UP_LABEL: Record<UpAxis, string> = { "+z": "+Z", "+y": "+Y" };
 
+/**
+ * confirm units and up axis for the part
+ */
 export function OrientCard() {
   const health = useStore((s) => s.health);
   const frame = useStore((s) => s.frame);
