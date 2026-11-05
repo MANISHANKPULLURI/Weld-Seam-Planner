@@ -1,5 +1,5 @@
 import { useStore } from "../../state/store";
-import { CheckIcon, AlertIcon, InfoIcon } from "../icons";
+import { CheckIcon, AlertIcon, InfoIcon, UploadIcon } from "../icons";
 import { cleanupNote, formatCount, formatSize, healthChecks } from "../../domain/mesh/describe";
 import { REPAIR_AVAILABLE } from "../../domain/mesh/repair";
 import { createSampleStl } from "../../domain/mesh/sample";
@@ -74,8 +74,8 @@ function Notes({ health }: { health: Health }) {
 function Checks({ health }: { health: Health }) {
   return (
     <ul className="health-checks" aria-label="Mesh checks">
-      {healthChecks(health).map((c) => (
-        <li key={c.id} className={`health-check health-check-${c.level}`}>
+      {healthChecks(health).map((c, i) => (
+        <li key={c.id} tabIndex={0} className={`health-check health-check-${c.level}`} style={{ animationDelay: `${Math.min(i, 7) * 40}ms` }}>
           <span className="health-check-icon" aria-hidden="true">{c.level === "ok" ? <CheckIcon size={12} /> : c.level === "info" ? <InfoIcon size={12} /> : <AlertIcon size={12} />}</span>
           <span className="health-check-label">{c.label}</span>
           <span className="health-check-value numeric">{formatCount(c.value)}</span>
@@ -175,7 +175,10 @@ export function HealthCard() {
         {!pass && REPAIR_AVAILABLE && <button type="button" className="btn-secondary" onClick={repairCurrentMesh}>Repair</button>}
         <button type="button" className="btn-primary" onClick={() => setStep("seams")}>{pass ? "Continue to seams" : "Continue as is"}</button>
       </div>
-      <button type="button" className="btn-link" onClick={loadAnother}>Load another file</button>
+      <div className="result-actions result-actions-split">
+      <button type="button" className="btn-secondary" onClick={loadAnother}><UploadIcon size={14} /> Load another file</button>
+      <button type="button" className="btn-ghost btn-danger" onClick={() => useStore.getState().setConfirm({ title: "Erase part?", message: "Clear the part and all its seams? This cannot be undone.", confirmLabel: "Erase", danger: true, action: () => { useStore.getState().setPendingImport(null); useStore.getState().loadAnother(); } })} title="Clear the part, seams and settings (like CAD Erase)">Erase part</button>
+    </div>
     </section>
   );
 }

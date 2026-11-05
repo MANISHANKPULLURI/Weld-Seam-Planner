@@ -229,6 +229,19 @@ export function SaveIcon({ size = 16 }: { size?: number }) {
   );
 }
 /**
+ * render the delete icon
+ */
+export function TrashIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="M6 7l1 13h10l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+/**
  * render the eye icon
  */
 export function EyeIcon({ size = 14, off = false }: { size?: number; off?: boolean }) {  return (

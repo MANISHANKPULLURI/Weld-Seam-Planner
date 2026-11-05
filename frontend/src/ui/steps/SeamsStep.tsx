@@ -1,7 +1,6 @@
 import { DetectCard } from "../components/DetectCard";
 import { ToolPalette } from "../components/ToolPalette";
 import { SeamList } from "../components/SeamList";
-import { SeamDetails } from "../components/SeamDetails";
 import { BodiesCard } from "../components/BodiesCard";
 import { SeamGuide } from "../components/SeamGuide";
 import { StepNav } from "../components/StepNav";
@@ -22,7 +21,6 @@ export function SeamsStep() {
       <DetectCard />
       <ToolPalette />
       <SeamList />
-      <SeamDetails />
       <BodiesCard />
       <StepNav note={kept ? `${kept} seam${kept === 1 ? "" : "s"} kept. Next: give them weld parameters.` : "Keep at least one seam (✓) before setting parameters."} />
     </div>

@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../state/store";
-import { discardSavedSession, loadSaved } from "../lib/persist";
+import { loadSaved } from "../lib/persist";
+import { createProject, currentProjectId, saveProjectSnapshot, setOpenProject } from "../lib/persist";
+import { useThemeSync } from "../lib/theme";
 import { Logo } from "./Logo";
 import { LockIcon } from "./icons";
+import { ToggleTheme } from "../components/lightswind/toggle-theme";
 
 type SavedSession = { fileName: string; savedAt: number } | null;
 
@@ -10,7 +13,9 @@ type SavedSession = { fileName: string; savedAt: number } | null;
  * render the landing page and saved-session resume
  */
 export function Home() {
+  useThemeSync();
   const [savedSession, setSavedSession] = useState<SavedSession | undefined>(undefined);
+  const livePart = useStore((s) => (s.phase !== "empty" ? s.part : null));
 
   useEffect(() => {
     let live = true;
@@ -22,24 +27,21 @@ export function Home() {
     return () => { live = false; };
   }, []);
 
+  const recentName = livePart?.fileName ?? savedSession?.fileName ?? null;
+
   /**
-   * discard the saved session and start a blank project
+   * open a blank project, stashing any open work into its own slot first
    */
-  const startNew = () => {
-    
-    
-    discardSavedSession();
-    useStore.getState().loadAnother();
+  const openNew = async () => {
+    const s = useStore.getState();
+    const from = currentProjectId();
+    if (from && s.phase !== "empty") await saveProjectSnapshot(from);
+    const id = await createProject();
+    if (id) setOpenProject(id);
+    s.loadAnother();
     location.hash = "#/planner";
   };
-  /**
-   * switch between dark and light themes
-   */
-  const toggle = () => {
-    const cur = document.documentElement.getAttribute("data-theme") || "dark";
-    const next = cur === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-  };
+
   return (
     <div className="home-root">
       <header className="home-header">
@@ -48,19 +50,19 @@ export function Home() {
           <span className="brand-divider" aria-hidden="true" />
           <span className="home-logo-wordmark">Weld Seam Planner</span>
         </div>
-        <button type="button" className="planner-collapse-btn" onClick={toggle}>Toggle theme</button>
+        <ToggleTheme duration={500} animationType="circle-spread" />
       </header>
       <main className="home-main">
         <div className="home-column">
           <h1 className="home-title">Plan robotic welds from a 3D part</h1>
           <p className="home-subtitle">Load an STL, pick the seams, set how each one is welded, and export a job a robot controller can read.</p>
           <div className="home-cta-row">
-            {savedSession === undefined ? (
+            {savedSession === undefined && !livePart ? (
               <span className="home-cta" aria-disabled="true">Open the planner</span>
-            ) : savedSession ? (
+            ) : recentName ? (
               <>
-                <button type="button" className="home-cta" onClick={startNew}>Start new project</button>
-                <a href="#/planner" className="home-continue">Continue {savedSession.fileName}</a>
+                <button type="button" className="home-cta" onClick={() => void openNew()}>Open new planner</button>
+                <a href="#/planner" className="home-continue">Continue {recentName}</a>
               </>
             ) : (
               <a href="#/planner" className="home-cta">Open the planner</a>

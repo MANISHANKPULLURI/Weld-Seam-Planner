@@ -4,6 +4,7 @@ import type { SeamSource } from "@weld/core";
 import type { Seam } from "../../state/store";
 import { CheckIcon, XIcon } from "../icons";
 import { JOINT_HELP, JOINT_LABEL, MANUAL } from "../labels";
+import { NumberField } from "./NumberField";
 
 /**
  * render one candidate row with accept and reject
@@ -19,7 +20,7 @@ function SeamRow({ seam }: { seam: Seam }) {
 
   return (
     <li className={`seam-row${selected ? " seam-row-selected" : ""}`} onMouseEnter={() => setHoverSeam(seam.id)} onMouseLeave={() => setHoverSeam(null)} onFocus={() => setHoverSeam(seam.id)} onBlur={() => setHoverSeam(null)}>
-      <button type="button" className="seam-row-main" onClick={() => selectSeam(selected ? null : seam.id)} aria-pressed={selected} aria-label={`${candidate ? "Candidate" : "Seam"} ${candidate ? JOINT_LABEL[seam.jointType] : seam.name}, ${seamLengthMm(seam, units).toFixed(1)} millimetres, ${candidate ? seam.reason : ""}`}>
+      <button type="button" className="seam-row-main" onClick={(e) => { const next = selected ? null : seam.id; selectSeam(next); if (next) { const host = document.querySelector(".viewport-wrapper"); const r = host?.getBoundingClientRect(); useStore.getState().setCardAnchor({ x: 12, y: r ? Math.max(8, e.clientY - r.top - 140) : 52 }); } }} aria-pressed={selected} aria-label={`${candidate ? "Candidate" : "Seam"} ${candidate ? JOINT_LABEL[seam.jointType] : seam.name}, ${seamLengthMm(seam, units).toFixed(1)} millimetres, ${candidate ? seam.reason : ""}`}>
         <span className={`seam-swatch${candidate ? " seam-swatch-candidate" : ""}`} style={candidate ? undefined : { background: seamColor(seam) }} aria-hidden="true" />
         <span className="seam-row-name" title={JOINT_HELP[seam.jointType]}>{candidate ? JOINT_LABEL[seam.jointType] : seam.name}</span>
         <span className="seam-row-meta">{candidate ? seam.reason : MANUAL[seam.source] ?? JOINT_LABEL[seam.jointType]}</span>
@@ -60,14 +61,12 @@ export function SeamList() {
   return (
     <>
       {allCandidates.length > 0 && (
-        <section className="seam-section" aria-label="Candidates">
-          <header className="seam-section-header">
-            <span className="section-label">Candidates <span className="numeric">{candidates.length}{candidates.length !== allCandidates.length ? ` of ${allCandidates.length}` : ""}</span></span>
-            <span className="seam-section-actions">
-              <button type="button" className="btn-link" onClick={() => { if (candidates.length > 5 && !window.confirm(`Accept ${candidates.length} candidates? You can undo.`)) return; acceptSeams(candidates.map((c) => c.id)); }} disabled={candidates.length === 0} title="Accept every candidate shown (undoable)">Accept shown</button>
-              <button type="button" className="btn-link" onClick={() => { if (candidates.length > 5 && !window.confirm(`Reject ${candidates.length} candidates? You can undo.`)) return; rejectSeams(candidates.map((c) => c.id)); }} disabled={candidates.length === 0} title="Reject every candidate shown (undoable)">Reject shown</button>
-            </span>
-          </header>
+        <details className="disclosure result-card">
+          <summary>All model seams <span className="numeric">{candidates.length}{candidates.length !== allCandidates.length ? ` of ${allCandidates.length}` : ""}</span></summary>
+          <div className="result-actions result-actions-split">
+            <button type="button" className="btn-primary" onClick={() => { const ids = candidates.map((c) => c.id); if (ids.length > 5) { useStore.getState().setConfirm({ title: "Accept shown?", message: `Accept ${ids.length} candidates? You can undo right after.`, confirmLabel: "Accept", action: () => useStore.getState().acceptSeams(ids) }); } else acceptSeams(ids); }} disabled={candidates.length === 0} title="Accept every candidate shown (undoable)">✓ Accept shown</button>
+            <button type="button" className="btn-ghost btn-danger" onClick={() => { const ids = candidates.map((c) => c.id); if (ids.length > 5) { useStore.getState().setConfirm({ title: "Reject shown?", message: `Reject ${ids.length} candidates? You can undo right after.`, confirmLabel: "Reject", danger: true, action: () => useStore.getState().rejectSeams(ids) }); } else rejectSeams(ids); }} disabled={candidates.length === 0} title="Reject every candidate shown (undoable)">✕ Reject shown</button>
+          </div>
           <div className="seam-filter" role="group" aria-label="Filter candidates">
             {sources.map(({ source, count }) => (
               <button key={source} type="button" className="chip" aria-pressed={!filter.hidden.includes(source)} onClick={() => toggle(source)}>
@@ -76,14 +75,14 @@ export function SeamList() {
             ))}
             <label className="seam-filter-length" title="Hide candidates shorter than this">
               Longer than
-              <input className="field-control" type="number" min={0} step={5} value={filter.minLengthMm || ""} placeholder="0" onChange={(e) => setCandidateFilter({ minLengthMm: Math.max(0, Number(e.target.value) || 0) })} />
+              <NumberField inline label="Longer than" unit="mm" step={5} min={0} value={filter.minLengthMm || null} onChange={(v) => setCandidateFilter({ minLengthMm: Math.max(0, v ?? 0) })} />
               mm
             </label>
           </div>
           {candidates.length > 0
             ? <ul className="seam-rows">{candidates.map((s) => <SeamRow key={s.id} seam={s} />)}</ul>
             : <p className="seam-empty">All candidates are filtered out.</p>}
-        </section>
+        </details>
       )}
 
       <details className="disclosure seam-legend">
@@ -93,19 +92,18 @@ export function SeamList() {
           <div><dt>Butt / corner weld</dt><dd>Plates edge to edge, or meeting at an outside corner.</dd></div>
           <div><dt>Inside corner, 90°</dt><dd>Where it was found, and the angle between the two surfaces.</dd></div>
           <div><dt>Plates touch / Intersections</dt><dd>Two separate parts resting on, or passing through, each other.</dd></div>
-          <div><dt>Dashed line</dt><dd>A suggestion. ✓ keeps it (solid line, own colour), ✕ drops it.</dd></div>
+          <div><dt>Dashed ring</dt><dd>A suggestion. ✓ keeps it (solid line, own colour), ✕ drops it.</dd></div>
         </dl>
       </details>
 
-      <section className="seam-section" aria-label="Seams">
-        <header className="seam-section-header">
-          <span className="section-label">Seams <span className="numeric">{accepted.length}</span></span>
-          {workArea && <span className="seam-area-note" title="Seams outside the work area are kept, just hidden">in work area, {everySeam.filter((x) => x.status === "accepted").length - accepted.length} outside</span>}
-        </header>
+      <details className="disclosure result-card">
+        <summary>Selected seams <span className="numeric">{accepted.length}</span>
+          {workArea && <span className="disclosure-meta" title="Seams outside the work area are kept, just hidden">{everySeam.filter((x) => x.status === "accepted").length - accepted.length} outside</span>}
+        </summary>
         {accepted.length === 0
           ? <p className="seam-empty">{workArea ? "No seams in this work area yet." : "No seams yet. Accept candidates, or add seams with Pick edge or Draw."}</p>
           : <ul className="seam-rows">{accepted.map((s) => <SeamRow key={s.id} seam={s} />)}</ul>}
-      </section>
+      </details>
     </>
   );
 }

@@ -1,12 +1,15 @@
 .check-card, .result-card {
   background: var(--bg-raised);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
+.check-card:hover, .result-card:hover { border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .check-card, .result-card { transition: none; } }
 
 .check-title, .result-title {
   display: flex;
@@ -90,7 +93,45 @@
   white-space: nowrap;
 }
 .status-badge-ok { color: var(--rev-green-t4); }
-.status-badge-warn { color: var(--warning); }
+.status-badge-warn { color: var(--warning); display: inline-flex; align-items: center; }
+.status-badge-warn::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
+  animation: badge-pulse 1.6s ease-in-out infinite;
+}
+@keyframes badge-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.8); } }
+
+.health-checks {
+  list-style: none;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.health-check {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 0;
+  align-items: center;
+  font-size: 13px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: default;
+  transition: border-color 180ms cubic-bezier(0.2, 0, 0, 1), transform 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 180ms;
+  animation: check-in 260ms cubic-bezier(0.2, 0, 0, 1) backwards;
+}
+@keyframes check-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.health-check:hover, .health-check:focus-visible { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); outline: none; }
+.health-check:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .status-badge-danger { color: var(--danger); }
 .status-badge-neutral { color: var(--text-muted); }
 
@@ -137,11 +178,17 @@
 .health-check-value { font-weight: 500; color: var(--text-secondary); }
 .health-check-warn .health-check-value { color: var(--warning); }
 .health-check-hint {
-  grid-column: 2 / 4;
+  grid-column: 1 / -1;
   font-size: 12px;
   line-height: 1.4;
   color: var(--text-muted);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 220ms cubic-bezier(0.2, 0, 0, 1), opacity 160ms, margin 220ms;
 }
+.health-check:hover .health-check-hint, .health-check:focus-visible .health-check-hint, .health-check:focus-within .health-check-hint { max-height: 72px; opacity: 1; margin-top: 4px; }
+@media (prefers-reduced-motion: reduce) { .health-check, .status-badge-warn::before { animation: none; } .health-check:hover { transform: none; } }
 
 .result-actions.result-actions-split { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .result-actions.result-actions-split > button { width: 100%; padding: 0 12px; }

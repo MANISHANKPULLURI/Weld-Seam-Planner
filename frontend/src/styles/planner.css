@@ -40,9 +40,17 @@
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
+  position: relative;
 }
+.planner-topbar-left-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .planner-topbar-left { justify-self: start; display: flex; align-items: center; color: inherit; }
-.planner-wordmark-center { justify-self: center; }
+.planner-wordmark-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
 .view-settings-col { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
 .view-settings-row { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 .view-settings-row-right { padding-right: 0; }
@@ -76,41 +84,62 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
 @keyframes theme-pop { from { transform: rotate(-90deg) scale(0.6); opacity: 0; } to { transform: rotate(0) scale(1); opacity: 1; } }
 @keyframes theme-spin { from { transform: rotate(90deg) scale(0.6); opacity: 0; } to { transform: rotate(0) scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .theme-toggle-icon { animation: none; } }
+
+/* Animated confirm modal (replaces native dialogs). */
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  animation: confirm-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes confirm-in { from { opacity: 0; } to { opacity: 1; } }
+.confirm-card {
+  width: min(380px, calc(100vw - 48px));
+  border-color: var(--border-strong);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: confirm-pop 240ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes confirm-pop { from { opacity: 0; transform: scale(0.92) translateY(10px); } to { opacity: 1; transform: none; } }
+.confirm-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.confirm-danger:hover { filter: brightness(1.1); background: var(--danger); }
+@media (prefers-reduced-motion: reduce) { .confirm-backdrop, .confirm-card { animation: none; } }
 .part-pill-float {
   position: absolute;
   top: 8px;
-  left: 50%;
+  /* Optical center of the free canvas: right chrome (~590px) outweighs the
+     left chrome (~230px), so true center sits left of geometric center. */
+  left: calc(50% - 150px);
   transform: translateX(-50%);
   z-index: 3;
-  max-width: min(560px, calc(100vw - 640px));
-  min-width: 0;
+  width: min(520px, max(180px, calc(100% - 798px)));
+  max-width: calc(100% - 24px);
   display: flex;
+  justify-content: center;
   pointer-events: auto;
+  container-type: inline-size;
 }
-.part-pill-float .part-chip { box-shadow: 0 2px 8px rgba(0,0,0,0.25); overflow: hidden; }
+.part-pill-float .part-chip { box-shadow: 0 2px 8px rgba(0,0,0,0.25); overflow: hidden; max-width: 100%; min-width: 0; }
 .part-pill-float .part-chip-name { overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 1350px) {
-  .part-pill-float { max-width: min(420px, calc(100vw - 560px)); }
-  .part-pill-float .part-chip { max-width: 100%; }
-}
-@media (max-width: 1100px) {
-  
-  .part-pill-float { max-width: 180px; }
+/* Panel closed: the canvas is symmetric again, so the pill returns to true center. */
+.planner-root-panel-collapsed .part-pill-float { left: 50%; width: min(520px, max(180px, calc(100% - 424px))); }
+/* Size-aware pill: meta columns drop off as the pill itself narrows,
+   whatever the window/panel combination (no viewport guessing). */
+@container (max-width: 440px) {
   .part-pill-float .part-chip-meta { display: none; }
-  .part-pill-float .part-chip { padding: 4px 10px; }
+}
+@container (max-width: 220px) {
+  .part-pill-float .part-chip-name { max-width: 110px; }
 }
 @media (max-width: 760px) {
-  
+  /* Dock below the top chrome instead of squeezing between controls */
   .part-pill-float { top: auto; bottom: 64px; left: 8px; transform: none; max-width: 60vw; }
   .part-pill-float .part-chip-meta { display: none; }
 }
-.save-status-float {
-  position: absolute;
-  z-index: 2;
-  right: 8px;
-  bottom: 38px;
-  display: flex;
-}
+.save-status-float { display: flex; }
 .save-status-float .save-status { font-size: 11px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px 8px; }
 
 .edge-toolbar {
@@ -169,7 +198,8 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
   white-space: nowrap;
 }
 
-.brand-logo { display: block; flex-shrink: 0; color: var(--text); }
+.brand-logo { display: block; flex-shrink: 0; color: var(--rev-green-t4); }
+html[data-theme="light"] .brand-logo { color: var(--rev-green); }
 
 .brand-divider {
   width: 1px;
@@ -214,8 +244,10 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
   flex-direction: column;
   overflow: auto;
   min-height: 0;
+  direction: rtl;
   transition: width 250ms cubic-bezier(0.2,0,0,1), opacity 150ms cubic-bezier(0.2,0,0,1);
 }
+.planner-panel > * { direction: ltr; }
 
 .planner-collapse-btn {
   white-space: nowrap;
@@ -281,64 +313,71 @@ html[data-theme="light"] .theme-toggle-icon { animation-name: theme-spin; }
   height: 100%;
 }
 
-.planner-steps {
+.step-timeline {
+  position: relative;
   list-style: none;
   margin: 0;
-  padding: 12px;
+  padding: 12px 20px 10px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
   border-bottom: 1px solid var(--border);
 }
-
-.planner-step {
+.step-timeline::before {
+  content: "";
+  position: absolute;
+  left: 38px;
+  right: 38px;
+  top: 25px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.step-node {
+  position: relative;
+  flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 150ms cubic-bezier(0.2,0,0,1), color 150ms cubic-bezier(0.2,0,0,1);
+  gap: 4px;
+  min-width: 0;
 }
-
-.planner-step-active {
-  background: var(--active-step);
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.planner-step-locked {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.planner-step-index {
-  width: 22px;
-  height: 22px;
+.step-dot {
+  position: relative;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   display: grid;
   place-items: center;
   font-size: 12px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 150ms, color 150ms, border-color 150ms, box-shadow 150ms;
 }
-
-.planner-step-active .planner-step-index {
-  background: var(--rev-green-t2);
-  border-color: var(--rev-green-t3);
-  color: var(--text);
+.step-dot:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.step-node-done .step-dot { background: var(--studio-active, var(--rev-green-t2)); border-color: var(--studio-active, var(--rev-green-t3)); color: var(--light-sand); }
+.step-node-active .step-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 }
+.step-node-locked { opacity: 0.55; }
+.step-node-locked .step-dot { cursor: not-allowed; }
+.step-node-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.step-node-active .step-node-label { color: var(--text); }
 
-.planner-step-label { font-size: 14px; font-weight: 500; }
-
-.planner-panel-content { padding: 16px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.planner-panel-content { padding: 16px; display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 100%; }
+.planner-panel-content > div { flex: 1; display: flex; flex-direction: column; }
+.step-nav { margin-top: auto; }
 
 .btn-primary {
   font-size: 13px;

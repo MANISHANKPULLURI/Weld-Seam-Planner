@@ -3,6 +3,7 @@ import { useStore } from "../../state/store";
 import type { Units, UpAxis } from "../../state/store";
 import { formatSize } from "../../domain/mesh/describe";
 import { CheckIcon } from "../icons";
+import { MenuSelect } from "./MenuSelect";
 
 const UP_LABEL: Record<UpAxis, string> = { "+z": "+Z", "+y": "+Y" };
 
@@ -33,22 +34,16 @@ export function OrientCard() {
       <p className="result-explainer">STL files carry no units. Check that the size below matches the real part. The model updates as you change these.</p>
 
       <div className="field-grid">
-        <label className="field">
-          <span className="field-label">File units</span>
-          <select className="field-control" value={frame.units} onChange={(e) => setUnits(e.target.value as Units)}>
-            <option value="mm">Millimetres</option>
-            <option value="cm">Centimetres</option>
-            <option value="m">Metres</option>
-            <option value="inch">Inches</option>
-          </select>
-        </label>
-        <label className="field">
-          <span className="field-label">Up axis in the file</span>
-          <select className="field-control" value={frame.upAxis} onChange={(e) => setUpAxis(e.target.value as UpAxis)}>
-            <option value="+z">+Z (most CAD)</option>
-            <option value="+y">+Y</option>
-          </select>
-        </label>
+        <MenuSelect<Units> label="File units" value={frame.units} onChange={(v) => setUnits(v)} options={[
+          { value: "mm", label: "Millimetres" },
+          { value: "cm", label: "Centimetres" },
+          { value: "m", label: "Metres" },
+          { value: "inch", label: "Inches" },
+        ]} />
+        <MenuSelect<UpAxis> label="Up axis in the file" value={frame.upAxis} onChange={(v) => setUpAxis(v)} options={[
+          { value: "+z", label: "+Z (most CAD)" },
+          { value: "+y", label: "+Y" },
+        ]} />
       </div>
 
       <dl className="health-summary">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../../state/store";
-import { SaveIcon, RefreshIcon } from "../icons";
+import { SaveIcon, RefreshIcon, TrashIcon } from "../icons";
 
 /**
  * format a timestamp as hours and minutes
@@ -46,6 +46,9 @@ export function WorkControls() {
         </button>
         <button type="button" aria-label="Reset options" aria-haspopup="menu" aria-expanded={open} onClick={(e) => { setOpen((v) => !v); e.currentTarget.blur(); }} title="Reset — back to last checkpoint or start over with this part">
           <RefreshIcon size={13} />
+        </button>
+        <button type="button" className="edge-btn-danger" aria-label="Erase part" onClick={(e) => { e.currentTarget.blur(); useStore.getState().setConfirm({ title: "Erase part?", message: "Clear the part and all its seams? This cannot be undone.", confirmLabel: "Erase", danger: true, action: () => { const s = useStore.getState(); s.setPendingImport(null); s.loadAnother(); } }); }} title="Erase the loaded part and all its seams">
+          <TrashIcon size={13} />
         </button>
       </div>
         {open && (

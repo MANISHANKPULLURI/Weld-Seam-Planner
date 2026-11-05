@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { MM_PER_UNIT, locateAlong, measure, partSizeMm, splitAtDistances } from "@weld/core";
 import { SceneController } from "./viewer/SceneController";
 import { seamColor } from "./viewer/seamColors";
 import type { SurfacePoint } from "./viewer/SceneController";
 import type { ViewId } from "./state/store";
 import { candidateVisible, inWorkArea, mergeTargets, orderedSeams, seamLengthMm, useStore } from "./state/store";
+import { JOINT_HELP } from "./ui/labels";
 import { ViewControls } from "./ui/components/ViewControls";
 import { WeldPlayer } from "./ui/components/WeldPlayer";
+import { SeamDetails } from "./ui/components/SeamDetails";
+import { ProcedureForm } from "./ui/components/ProcedureLibrary";
 import { PartChip } from "./ui/components/PartChip";
-import { SaveStatusLine } from "./ui/components/WorkControls";
 import { OrientationGizmo } from "./viewer/OrientationGizmo";
 import { formatSize } from "./domain/mesh/describe";
 
@@ -27,6 +30,27 @@ function draftPath(all: DraftPoint[]) {
    */
   const flat = (key: "point" | "normal") => new Float32Array(points.flatMap((p) => p[key]));
   return measure({ points: flat("point"), normalsA: flat("normal"), normalsB: flat("normal"), closed: false, length: 0 });
+}
+
+/**
+ * floating card pinned beside the panel, used for seam verdicts, seam ops and procedure editing
+ */
+function FloatCard({ title, onClose, min, onToggleMin, style, label, wide, footer, children }: {
+  title: ReactNode; onClose: () => void; min: boolean; onToggleMin: () => void; style?: CSSProperties; label: string; wide?: boolean; footer?: ReactNode; children: ReactNode;
+}) {
+  return (
+    <section className="seam-float result-card" style={{ position: "absolute", zIndex: 6, width: wide ? 340 : 300, maxWidth: "calc(100% - 24px)", ...style }} aria-label={label}>
+      <header className="result-header">
+        <span className="result-title">{title}</span>
+        <span className="seam-head-actions">
+          <button type="button" className="btn-link" onClick={onToggleMin} aria-expanded={!min}>{min ? "Expand" : "Collapse"}</button>
+          <button type="button" className="btn-link" onClick={onClose}>Close</button>
+        </span>
+      </header>
+      {!min && <div className="seam-float-body">{children}</div>}
+      {!min && footer && <div className="seam-float-footer">{footer}</div>}
+    </section>
+  );
 }
 
 /**
@@ -83,6 +107,21 @@ export default function Viewport() {
   const viewMode = useStore((s) => s.viewMode);
   const seams = useStore((s) => s.seams);
   const selectedSeamId = useStore((s) => s.selectedSeamId);
+  const selectedCandidate = useStore((s) => {
+    const x = s.seams.find((y) => y.id === s.selectedSeamId);
+    return x && x.status === "candidate" ? x : null;
+  });
+  const selectedAccepted = useStore((s) => {
+    const x = s.seams.find((y) => y.id === s.selectedSeamId);
+    return x && x.status === "accepted" ? x : null;
+  });
+  const cardAnchor = useStore((s) => s.cardAnchor);
+  const procDraft = useStore((s) => s.procDraft);
+  const procEditId = useStore((s) => s.procEditId);
+  const procEdit = useStore((s) => s.procedures.find((p) => p.id === s.procEditId) ?? null);
+  const [floatMin, setFloatMin] = useState(false);
+  useEffect(() => { setFloatMin(false); }, [selectedSeamId, procDraft?.id, procEditId, step]);
+  const floatPos = { left: 12, top: cardAnchor ? `min(${Math.round(cardAnchor.y)}px, calc(100% - 340px))` : 52 } as CSSProperties;
   const hoverId = useStore((s) => s.hoverSeamId);
   const setHoverId = useStore((s) => s.setHoverSeam);
   const featureChains = useStore((s) => s.featureChains);
@@ -281,6 +320,8 @@ export default function Viewport() {
     function onKey(e: KeyboardEvent) {
       if (isTyping(e.target)) return;
       const s = useStore.getState();
+      if (e.key === "Escape" && s.procDraft) { s.setProcDraft(null); return; }
+      if (e.key === "Escape" && s.procEditId) { s.setProcEditId(null); return; }
       const k = e.key.toLowerCase();
       if ((e.metaKey || e.ctrlKey) && k === "z" && !e.shiftKey) { if (s.undo) { e.preventDefault(); s.undoLast(); } return; }
       if ((e.metaKey || e.ctrlKey) && (k === "y" || (k === "z" && e.shiftKey))) { if (s.redo) { e.preventDefault(); s.redoLast(); } return; }
@@ -320,7 +361,12 @@ export default function Viewport() {
       if (k === "v" && s.selectedSeamId) { e.preventDefault(); s.reverseSeam(s.selectedSeamId); return; }
       if (e.key === "Escape") { if (s.pendingAction) s.setPendingAction(null); else if (s.selectedSeamId) s.selectSeam(null); else if (s.focus) s.setFocus(null); else setShowHelp(false); }
       if (e.key === "Enter" && s.pendingAction === "split" && s.selectedSeamId) { e.preventDefault(); s.splitSeamAt(s.selectedSeamId, s.splitCuts ?? []); return; }
-      if ((e.key === "Delete" || e.key === "Backspace") && s.selectedSeamId && s.step === "seams") { e.preventDefault(); s.deleteSeam(s.selectedSeamId); }
+      if ((e.key === "Delete" || e.key === "Backspace") && s.selectedSeamId && s.step === "seams") { e.preventDefault(); s.deleteSeam(s.selectedSeamId); return; }
+      if ((e.key === "Delete" || e.key === "Backspace") && !s.selectedSeamId && s.mesh && s.step === "part" && !s.pendingAction) {
+        e.preventDefault();
+        s.setConfirm({ title: "Erase part?", message: "Clear the part and all its seams? This cannot be undone.", confirmLabel: "Erase", danger: true, action: () => { const st = useStore.getState(); st.setPendingImport(null); st.loadAnother(); } });
+        return;
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -409,6 +455,11 @@ export default function Viewport() {
       return;
     }
     s.selectSeam(c.pickSeam(e));
+    const picked = useStore.getState().selectedSeamId;
+    if (picked && hostRef.current) {
+      const r = hostRef.current.getBoundingClientRect();
+      useStore.getState().setCardAnchor({ x: 12, y: Math.max(8, e.clientY - r.top - 140) });
+    }
   }
 
   const sizeMm = health ? partSizeMm(health.bounds.size, frame.units, frame.upAxis) : null;
@@ -431,7 +482,32 @@ export default function Viewport() {
       />
       <ViewControls controller={ctrl} />
       <div className="part-pill-float"><PartChip /></div>
-      <div className="save-status-float"><SaveStatusLine /></div>
+      {step === "seams" && selectedCandidate && (
+        <FloatCard key={selectedCandidate.id} title="Suggestion" label="Review suggestion" min={floatMin} onToggleMin={() => setFloatMin((v) => !v)} onClose={() => useStore.getState().selectSeam(null)} style={floatPos}>
+          <p className="review-what"><strong>{selectedCandidate.reason}</strong> · {seamLengthMm(selectedCandidate, frame.units).toFixed(1)} mm · {selectedCandidate.confidence >= 0.85 ? "high" : selectedCandidate.confidence >= 0.7 ? "medium" : "low"} confidence</p>
+          <p className="result-explainer">{JOINT_HELP[selectedCandidate.jointType]} Confidence is high for clean right-angle corners and lower for unusual angles or touching parts.</p>
+          <div className="result-actions result-actions-split">
+            <button type="button" className="btn-secondary" onClick={() => useStore.getState().rejectSeams([selectedCandidate.id])}><span className="tick">✕</span> Drop</button>
+            <button type="button" className="btn-primary" onClick={() => useStore.getState().acceptSeams([selectedCandidate.id])}><span className="tick">✓</span> Keep</button>
+          </div>
+        </FloatCard>
+      )}
+      {step === "seams" && selectedAccepted && (
+        <div key={selectedAccepted.id} style={{ position: "absolute", zIndex: 6, width: 300, maxWidth: "calc(100% - 24px)", ...floatPos }}>
+          <SeamDetails min={floatMin} onToggleMin={() => setFloatMin((v) => !v)} />
+        </div>
+      )}
+      {step === "procedures" && procDraft && (
+        <FloatCard key={procDraft.id} wide title={<span className="proc-draft-name">Custom procedure</span>} label="New custom procedure" min={floatMin} onToggleMin={() => setFloatMin((v) => !v)} onClose={() => useStore.getState().setProcDraft(null)} style={floatPos} footer={<><button type="button" className="btn-secondary" onClick={() => useStore.getState().setProcDraft(null)}>Discard</button><button type="button" className="btn-primary" onClick={() => { const s = useStore.getState(); if (s.procDraft) { s.saveProcedure(s.procDraft); s.setProcDraft(null); } }}>Apply changes</button></>}>
+          <p className="result-explainer">Set your own values, then Apply to add it to the library.</p>
+          <ProcedureForm procedure={procDraft} onChange={(p) => useStore.getState().setProcDraft(p)} />
+        </FloatCard>
+      )}
+      {step === "procedures" && !procDraft && procEdit && (
+        <FloatCard key={procEdit.id} wide title={procEdit.name} label={`Edit ${procEdit.name}`} min={floatMin} onToggleMin={() => setFloatMin((v) => !v)} onClose={() => useStore.getState().setProcEditId(null)} style={floatPos}>
+          <ProcedureForm procedure={procEdit} onChange={(p) => useStore.getState().saveProcedure(p)} />
+        </FloatCard>
+      )}
       <div className="orientation-gizmo-host">
         <OrientationGizmo controller={ctrl} onView={(id: ViewId) => { setView(id); ctrl?.setView(id); }} />
       </div>

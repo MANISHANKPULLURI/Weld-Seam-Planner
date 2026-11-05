@@ -45,7 +45,8 @@ export function OrientationGizmo({ controller, onView }: Props) {
       ctx.fill();
       ctx.stroke();
       const q = cam.quaternion;
-      const colors: Record<string,string> = { X: "#ff4d4d", Y: "#2d8a2d", Z: "#2a5bd7" };
+      const cssVar = (name: string, fallback: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+      const colors: Record<string, string> = { X: cssVar("--axis-x", "#ff4d4d"), Y: cssVar("--axis-y", "#2d8a2d"), Z: cssVar("--axis-z", "#2a5bd7") };
       const axesDefs: { dir:[number,number,number]; label:string; color:string }[] = [
         { dir: [1,0,0], label: "X", color: colors.X! },
         { dir: [0,1,0], label: "Y", color: colors.Y! },

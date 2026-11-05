@@ -70,11 +70,23 @@
                 "auto"
               ],
               "description": "Default supervision mode"
+            },
+            "air_speed_mm_s": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Torch speed for moves between seams"
+            },
+            "waypoint_spacing_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Distance between exported waypoints along each seam"
             }
           },
           "required": [
             "arc_enabled",
-            "default_supervision"
+            "default_supervision",
+            "air_speed_mm_s",
+            "waypoint_spacing_mm"
           ],
           "additionalProperties": false,
           "description": "Execution settings"
@@ -97,13 +109,8 @@
       "properties": {
         "units": {
           "type": "string",
-          "enum": [
-            "mm",
-            "cm",
-            "m",
-            "inch"
-          ],
-          "description": "Units for all millimetre fields after part_to_job transform"
+          "const": "mm",
+          "description": "All *_mm fields are millimetres in the job frame"
         },
         "handedness": {
           "type": "string",
@@ -142,6 +149,11 @@
         "part_to_job": {
           "type": "object",
           "properties": {
+            "scale_to_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Multiply part file coordinates by this to get millimetres (file units: mm 1, cm 10, m 1000, inch 25.4)"
+            },
             "translation_mm": {
               "type": "array",
               "items": [
@@ -190,11 +202,12 @@
             }
           },
           "required": [
+            "scale_to_mm",
             "translation_mm",
             "rotation_quaternion_xyzw"
           ],
           "additionalProperties": false,
-          "description": "Transform from part origin to job frame"
+          "description": "job = rotation · (scale_to_mm · part) + translation"
         }
       },
       "required": [
@@ -215,9 +228,16 @@
           "description": "Original STL filename"
         },
         "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$",
-          "description": "SHA256 hex of original file bytes"
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "SHA256 hex of original file bytes, null if the browser could not hash"
         },
         "triangle_count": {
           "type": "integer",
@@ -383,6 +403,39 @@
               }
             ],
             "description": "Process kind and ISO code"
+          },
+          "material": {
+            "description": "Base metal and thickness; older jobs may omit it",
+            "type": "object",
+            "properties": {
+              "metal": {
+                "type": "string",
+                "enum": [
+                  "steel",
+                  "stainless",
+                  "aluminium",
+                  "other"
+                ],
+                "description": "Base metal the procedure is tuned for"
+              },
+              "thickness_mm": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Plate thickness in millimetres or null when unset"
+              }
+            },
+            "required": [
+              "metal",
+              "thickness_mm"
+            ],
+            "additionalProperties": false
           },
           "wire": {
             "type": "object",
@@ -765,7 +818,7 @@
                   "fillet",
                   "butt",
                   "corner",
-                  "t_joint"
+                  "unknown"
                 ],
                 "description": "Joint type guess"
               },
@@ -864,11 +917,62 @@
           },
           "overrides": {
             "type": "object",
-            "propertyNames": {
-              "type": "string"
+            "properties": {
+              "voltage_v": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "current_a": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "wire_feed_speed_m_min": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "travel_speed_mm_min": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
             },
-            "additionalProperties": {},
-            "description": "Per-seam procedure overrides never stored twice beyond procedure"
+            "additionalProperties": false,
+            "description": "Values that differ from the procedure for this seam only"
+          },
+          "effective": {
+            "type": "object",
+            "properties": {
+              "voltage_v": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "current_a": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "wire_feed_speed_m_min": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "travel_speed_mm_min": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "voltage_v",
+              "current_a",
+              "wire_feed_speed_m_min",
+              "travel_speed_mm_min"
+            ],
+            "additionalProperties": false,
+            "description": "Values the robot should use: procedure plus overrides"
           },
           "torch": {
             "type": "object",
@@ -1000,6 +1104,11 @@
               }
             ],
             "description": "Intermittent settings or null for continuous"
+          },
+          "wait_after_s": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Pause after this seam (interpass / cooling), seconds"
           },
           "supervision": {
             "type": "string",
@@ -1184,6 +1293,27 @@
                       "minItems": 3,
                       "maxItems": 3,
                       "description": "Contact tip position in millimetres"
+                    },
+                    "tool_quaternion_xyzw": {
+                      "type": "array",
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "additionalItems": false,
+                      "minItems": 4,
+                      "maxItems": 4,
+                      "description": "Tool frame orientation: z = torch axis (toward the weld), x = travel direction projected, y = z × x"
                     }
                   },
                   "required": [
@@ -1192,7 +1322,8 @@
                     "tangent",
                     "surface_normals",
                     "torch_axis",
-                    "contact_tip_mm"
+                    "contact_tip_mm",
+                    "tool_quaternion_xyzw"
                   ],
                   "additionalProperties": false,
                   "description": "Seam waypoint with frame"
@@ -1277,7 +1408,8 @@
                 "type": "string",
                 "enum": [
                   "ok",
-                  "blocked"
+                  "blocked",
+                  "not_checked"
                 ],
                 "description": "Torch clearance check"
               }
@@ -1299,11 +1431,13 @@
           "direction",
           "procedure_ref",
           "overrides",
+          "effective",
           "torch",
           "start",
           "end",
           "weld_size",
           "intermittent",
+          "wait_after_s",
           "supervision",
           "inspection",
           "geometry",
@@ -1335,6 +1469,21 @@
           "minimum": 0,
           "description": "Total arc time seconds"
         },
+        "air_travel_mm": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Straight-line torch travel between seams, including approach and retract"
+        },
+        "air_time_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Air travel time at the job's air speed"
+        },
+        "wait_time_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Sum of waits between seams"
+        },
         "estimated_cycle_time_s": {
           "type": "number",
           "minimum": 0,
@@ -1345,6 +1494,9 @@
         "seam_count",
         "total_length_mm",
         "arc_time_s",
+        "air_travel_mm",
+        "air_time_s",
+        "wait_time_s",
         "estimated_cycle_time_s"
       ],
       "additionalProperties": false,
