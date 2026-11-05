@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { MM_PER_UNIT } from "@weld/core";
 import { orderedSeams, seamCalc, useStore } from "../../state/store";
 import type { SceneController } from "../../viewer/SceneController";
 import { arcSegment } from "../../viewer/simulation";
 import type { SimSegment } from "../../viewer/simulation";
 import { formatTime } from "./WeldSeamList";
+import { MenuSelect } from "./MenuSelect";
 
 const SPEEDS = [1, 5, 10, 30];
 
@@ -71,13 +73,11 @@ export function WeldPlayer({ controller }: { controller: SceneController | null 
 
   return (
     <div className="weld-player" role="group" aria-label="Play the weld plan">
-      <button type="button" className="btn-primary weld-player-play" onClick={toggle} aria-label={playing ? "Pause" : "Play weld"}>{playing ? "❚❚ Pause" : "▶ Play weld"}</button>
+      <button type="button" className={`btn-primary weld-player-play${playing ? "" : " weld-player-idle"}`} onClick={toggle} aria-label={playing ? "Pause" : "Play weld"}>{playing ? "❚❚ Pause" : "▶ Play weld"}</button>
       <button type="button" className="view-btn" onClick={() => { controller?.simPause(); controller?.simSeek(0); setPlaying(false); }} aria-label="Back to start">⏮</button>
-      <input className="weld-player-range" type="range" min={0} max={progress.total || 1} step={0.01} value={progress.t} onChange={(e) => controller?.simSeek(Number(e.target.value))} aria-label="Position in the weld run" />
+      <input className="weld-player-range" type="range" min={0} max={progress.total || 1} step={0.01} value={progress.t} onChange={(e) => controller?.simSeek(Number(e.target.value))} aria-label="Position in the weld run" style={{ "--p": `${progress.total ? (progress.t / progress.total) * 100 : 0}%` } as CSSProperties} />
       <span className="weld-player-time numeric">{formatTime(progress.t)} / {formatTime(progress.total)}</span>
-      <select className="field-control weld-player-speed" value={speed} onChange={(e) => { const v = Number(e.target.value); setSpeed(v); controller?.simSpeed(v); }} aria-label="Playback speed">
-        {SPEEDS.map((v) => <option key={v} value={v}>{v}×</option>)}
-      </select>
+      <MenuSelect label="Playback speed" value={String(speed)} onChange={(v) => { const n = Number(v); setSpeed(n); controller?.simSpeed(n); }} options={SPEEDS.map((v) => ({ value: String(v), label: `${v}×` }))} className="menu-select-view" openUp />
       <span className="weld-player-what">{progress.t > 0 ? names[progress.segment] : "Watch the torch weld every seam in order"}</span>
     </div>
   );

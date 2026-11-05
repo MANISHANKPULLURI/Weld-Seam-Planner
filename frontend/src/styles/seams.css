@@ -68,6 +68,197 @@
   height: 32px;
 }
 
+/* Animated checkboxes: springy check draw-in, pressed squash, visible focus. */
+.field-check input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  cursor: pointer;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  transition: background 180ms cubic-bezier(0.2, 0, 0, 1), border-color 180ms cubic-bezier(0.2, 0, 0, 1), transform 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+.field-check input[type="checkbox"]::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-left: 2.5px solid var(--text-on-accent);
+  border-bottom: 2.5px solid var(--text-on-accent);
+  transform: rotate(-45deg) scale(0) translateY(-0.5px);
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.field-check input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+.field-check input[type="checkbox"]:checked::after { transform: rotate(-45deg) scale(1) translateY(-0.5px); }
+.field-check input[type="checkbox"]:active { transform: scale(0.86); }
+.field-check input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Dropdown selects: button + same-canvas animated menu (no native popup clash). */
+.menu-select { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.menu-select-btn > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.menu-select > .field-label { font-size: 12px; color: var(--text-secondary); }
+/* Topbar project switcher: collapsed to one button, dropdown on demand. */
+.project-switcher { min-width: 0; }
+.project-switcher > .menu-select-btn { max-width: 220px; }
+.project-switcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-switcher-list { min-width: 250px; max-height: min(60vh, 380px); overflow-y: auto; }
+.project-row { display: flex; align-items: center; gap: 4px; }
+.project-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.project-row-main:hover { background: var(--bg-raised); color: var(--text); }
+.project-row-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.project-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; font-weight: 500; }
+.project-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.8; }
+.project-row-delete {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.project-row-delete:hover { color: var(--danger); border-color: var(--danger); }
+/* Opens upward (viewport bottom chrome). */
+.menu-select-up .menu-select-list { top: auto; bottom: calc(100% + 6px); transform-origin: bottom center; animation-name: menu-up-in; }
+@keyframes menu-up-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+/* View switcher: compact, label hidden (wrap already says "View"), menu right-aligned. */
+.menu-select-view > .field-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.menu-select-view { min-width: 0; }
+.menu-select-view .menu-select-btn { height: 26px; font-size: 11px; padding: 0 8px; gap: 4px; }
+.menu-select-view .menu-select-list { left: auto; right: 0; min-width: 118px; }
+.menu-select-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.menu-select-btn:hover { border-color: var(--accent); }
+.menu-select-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.menu-select-chev { display: inline-block; color: var(--text-muted); transition: transform 180ms cubic-bezier(0.2, 0, 0, 1); }
+.menu-select-chev-open { transform: rotate(180deg); color: var(--accent); }
+.menu-select-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: menu-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top center;
+}
+@keyframes menu-in { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.menu-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms, color 140ms;
+}
+.menu-select-item:hover, .menu-select-item-active { background: var(--bg-raised); color: var(--text); }
+.menu-select-item-current { color: var(--text); }
+.menu-select-check { width: 14px; color: var(--accent); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .menu-select-chev, .menu-select-list { transition: none; animation: none; } }
+/* Same animated tick for bulk-select boxes (WeldSeamList "All" + per-row). */
+.weld-check-all input[type="checkbox"], input[type="checkbox"].weld-row-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  cursor: pointer;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  transition: background 180ms cubic-bezier(0.2, 0, 0, 1), border-color 180ms cubic-bezier(0.2, 0, 0, 1), transform 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+.weld-check-all input[type="checkbox"]::after, input[type="checkbox"].weld-row-check::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-left: 2.5px solid var(--text-on-accent);
+  border-bottom: 2.5px solid var(--text-on-accent);
+  transform: rotate(-45deg) scale(0) translateY(-0.5px);
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.weld-check-all input[type="checkbox"]:checked, input[type="checkbox"].weld-row-check:checked { background: var(--accent); border-color: var(--accent); }
+.weld-check-all input[type="checkbox"]:checked::after, input[type="checkbox"].weld-row-check:checked::after { transform: rotate(-45deg) scale(1) translateY(-0.5px); }
+.weld-check-all input[type="checkbox"]:active, input[type="checkbox"].weld-row-check:active { transform: scale(0.86); }
+.weld-check-all input[type="checkbox"]:focus-visible, input[type="checkbox"].weld-row-check:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Animated steppers replace the plain native number-input spinners. */
+.field-stepper-inline { display: inline-flex; align-items: stretch; vertical-align: middle; }
+.field-stepper { display: flex; gap: 4px; align-items: stretch; }
+.field-stepper .field-control { flex: 1; min-width: 0; }
+.field-stepper .field-control::-webkit-outer-spin-button, .field-stepper .field-control::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.field-stepper .field-control { -moz-appearance: textfield; appearance: textfield; }
+.stepper-btns { display: flex; flex-direction: column; gap: 2px; }
+.stepper-btns button {
+  flex: 1;
+  width: 24px;
+  min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: linear-gradient(to bottom, var(--bg-raised), var(--bg-panel));
+  color: var(--text-secondary);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0 0 1px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: background 140ms cubic-bezier(0.2, 0, 0, 1), color 140ms, border-color 140ms, transform 100ms cubic-bezier(0.2, 0, 0, 1), box-shadow 140ms;
+}
+.stepper-btns button:hover { color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 2px 8px rgba(0, 0, 0, 0.35); }
+.stepper-btns button:active { transform: scale(0.82); background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .field-check input[type="checkbox"], .field-check input[type="checkbox"]::after, .weld-check-all input[type="checkbox"], .weld-check-all input[type="checkbox"]::after, input[type="checkbox"].weld-row-check, input[type="checkbox"].weld-row-check::after, .stepper-btns button { transition: none; } }
+
 .section-label {
   font-size: 11px;
   font-weight: 500;
@@ -79,7 +270,6 @@
 
 .seam-section { display: flex; flex-direction: column; gap: 6px; }
 .seam-section-header { display: flex; align-items: center; justify-content: space-between; }
-.seam-section-actions { display: flex; gap: 12px; }
 .seam-empty { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.45; }
 
 .seam-rows {
@@ -121,13 +311,15 @@
   cursor: pointer;
 }
 .seam-row-main:hover { color: var(--text); }
-.seam-row-name { color: var(--text); font-weight: 500; white-space: nowrap; }
+.seam-row-name { color: var(--text); font-weight: 500; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .seam-row-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
 .seam-row-length { color: var(--text-secondary); }
 
-.seam-swatch { width: 14px; height: 3px; border-radius: 2px; background: var(--seam-accepted); }
-.seam-swatch-candidate { background: repeating-linear-gradient(90deg, var(--seam-candidate) 0 4px, transparent 4px 7px); }
-.seam-row-selected .seam-swatch { background: var(--accent); }
+.seam-swatch { width: 14px; height: 3px; border-radius: 2px; background: var(--seam-accepted); flex: none; }
+/* Candidate marker: small hollow dashed ring — same "dashed = suggestion"
+   language as before, without the noisy double-dash bars. */
+.seam-swatch-candidate { width: 10px; height: 10px; border-radius: 999px; background: transparent; border: 2px dashed var(--seam-candidate); }
+.seam-row-selected .seam-swatch { background: var(--accent); border-style: solid; border-color: var(--accent); }
 
 .seam-row-actions { display: flex; gap: 2px; padding-right: 6px; }
 
@@ -164,10 +356,11 @@
 }
 .body-row {
   display: grid;
-  grid-template-columns: 24px auto 1fr auto;
+  grid-template-columns: 28px minmax(0, auto) minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
-  height: 28px;
+  min-height: 32px;
+  padding: 2px 0 2px 4px;
   font-size: 12px;
   color: var(--text);
 }
@@ -261,6 +454,12 @@
 }
 .view-btn:hover { background: var(--bg-raised); color: var(--text); }
 .view-btn-active, .view-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--text); }
+.hamburger { display: inline-grid; gap: 3px; justify-items: center; padding: 2px 0; }
+.hamburger i { display: block; width: 13px; height: 2px; border-radius: 1px; background: currentColor; transition: transform 200ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms; }
+.view-btn[aria-expanded="true"] .hamburger i:nth-child(1) { transform: translateY(5px) rotate(45deg); }
+.view-btn[aria-expanded="true"] .hamburger i:nth-child(2) { opacity: 0; }
+.view-btn[aria-expanded="true"] .hamburger i:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+@media (prefers-reduced-motion: reduce) { .hamburger i { transition: none; } }
 
 .view-segmented {
   display: flex;
@@ -280,6 +479,7 @@
 }
 .view-segmented button[aria-pressed="true"] { background: var(--bg-raised); color: var(--text); }
 .view-segmented button:hover { background: var(--bg-raised); }
+.edge-bar .edge-btn-danger:hover { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 
 .view-controls-top-right {
   top: 8px;
@@ -296,8 +496,9 @@
   left: auto;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   max-width: 55vw;
-  gap: 4px;
+  gap: 8px;
 }
 .view-btn-compact {
   padding: 0 7px;
@@ -317,18 +518,72 @@
   font-size: 12px;
 }
 .view-select-label { display: inline-flex; align-items: center; gap: 6px; }
-.view-select {
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-  color-scheme: light dark;
-}
-.view-select option { color: initial; }
+.view-select-wrap .menu-select-view { min-width: 86px; }
 .seam-guide-compact { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .seam-details { position: sticky; bottom: 0; }
+/* Seam verdict + ops cards float beside the panel, over the canvas — never inside the scroll stack.
+   Keyed by seam id so picking another seam remounts with a visible change animation.
+   They unmount the moment another seam is picked or the step changes (render-gated). */
+.seam-float {
+  position: absolute;
+  z-index: 6;
+  width: 300px;
+  max-height: calc(100% - 96px);
+  display: flex;
+  flex-direction: column;
+  border-color: var(--accent);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  animation: float-in 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.seam-float > .result-header { flex: none; }
+.seam-float-body {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.seam-float-footer {
+  flex: none;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.seam-float-footer > button { width: 100%; }
+.seam-float:has(.proc-form) { width: 340px; }
+.seam-float .seam-details {
+  position: static;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+/* Animated ✓/✕ glyphs: pop in every time the card remounts on a new pick. */
+.tick { display: inline-block; animation: tick-pop 300ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes tick-pop { 0% { transform: scale(0) rotate(-25deg); } 60% { transform: scale(1.3) rotate(6deg); } 100% { transform: scale(1) rotate(0); } }
+.is-done .seam-guide-num { animation: tick-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+/* Custom-procedure name carries a slow accent sheen instead of sitting as flat text. */
+.proc-draft-name {
+  background: linear-gradient(90deg, var(--text) 30%, var(--accent) 50%, var(--text) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: name-sheen 2.4s linear infinite;
+}
+@keyframes name-sheen { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .tick, .is-done .seam-guide-num, .proc-draft-name { animation: none; } .proc-draft-name { color: var(--text); background: none; } }
+@keyframes float-in { from { opacity: 0; transform: translateX(-12px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .seam-float { animation: none; } }
+@media (max-width: 760px) {
+  .seam-float { left: 8px !important; right: 8px; top: auto !important; bottom: 64px; width: auto; }
+}
 
 .seam-details .seam-action-help,
 .seam-details > .result-explainer:last-child { min-height: 4.5em; }
@@ -415,7 +670,7 @@
   .view-controls-bottom-left.view-chip { left: 8px; bottom: 8px; }
 }
 
-.seam-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.seam-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .chip {
   display: inline-flex;
   align-items: center;
@@ -431,8 +686,8 @@
 }
 .chip .numeric { color: inherit; opacity: 0.8; }
 .chip[aria-pressed="true"] { background: var(--bg-raised); color: var(--text); border-color: var(--rev-green-t3); }
-.seam-filter-length { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); margin-left: auto; }
-.seam-filter-length .field-control { width: 56px; height: 24px; font-size: 11px; padding: 0 6px; }
+.seam-filter-length { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.seam-filter-length .field-stepper-inline .field-control { width: 56px; height: 24px; font-size: 11px; padding: 0 6px; }
 .btn-link:disabled { opacity: 0.4; cursor: not-allowed; }
 .view-section-confirm { height: 28px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
 .view-section-locked { padding: 0 4px; white-space: nowrap; }
@@ -453,11 +708,24 @@
 
 
 .proc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.proc-row { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.proc-row-active { border-color: var(--accent); }
+.proc-row {
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-raised);
+  transition: border-color 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 220ms cubic-bezier(0.2, 0, 0, 1), transform 180ms cubic-bezier(0.2, 0, 0, 1), background 180ms;
+}
+.proc-row:hover { border-color: var(--rev-green-t3); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
+.proc-row-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--bg-raised)); box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(0, 0, 0, 0.35); }
 .proc-row-main { display: flex; gap: 8px; align-items: flex-start; background: none; border: none; padding: 0; text-align: left; cursor: pointer; color: inherit; }
-.proc-radio { flex: none; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; border: 1px solid var(--border-strong); }
-.proc-row-active .proc-radio { border: 4px solid var(--accent); }
+.proc-radio { flex: none; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; transition: border-color 180ms; }
+.proc-radio::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); transform: scale(0); transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.proc-row-active .proc-radio { border-color: var(--accent); }
+.proc-row-active .proc-radio::after { transform: scale(1); }
+@media (prefers-reduced-motion: reduce) { .proc-row, .proc-radio, .proc-radio::after { transition: none; } .proc-row:hover { transform: none; } }
 .proc-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .proc-name { font-size: 13px; color: var(--text); }
 .proc-meta { font-size: 11px; color: var(--text-muted); }
@@ -489,20 +757,22 @@
 .split-mode { align-self: flex-start; }
 .split-range { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .split-mm { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
-.split-mm .field-control { width: 72px; height: 28px; }
+.split-mm .field-stepper-inline .field-control { width: 72px; height: 28px; }
 .split-readout { margin: 0; font-size: 12px; color: var(--text); }
 
 
-.seq-tools { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: end; }
+.seq-tools { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
+.seq-tools > .btn-primary { margin-top: 21px; }
 .seq-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.seq-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel); }
+.seq-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel); cursor: grab; }
+.seq-row:active { cursor: grabbing; }
 .seq-row-drag { opacity: 0.5; }
-.seq-grip { cursor: grab; color: var(--text-muted); font-size: 11px; letter-spacing: -2px; }
 .seq-num { width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--accent); color: var(--text-on-accent); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
 .seq-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: none; border: none; text-align: left; color: inherit; cursor: pointer; padding: 2px 0; }
 .seq-sub, .seq-small { font-size: 11px; color: var(--text-muted); margin: 0; }
-.seq-wait { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: var(--text-muted); }
-.seq-wait .field-control { width: 46px; height: 24px; font-size: 11px; padding: 0 4px; }
+.seq-wait { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); min-width: 0; }
+.seq-wait .field-stepper-inline .field-control { width: 46px; height: 24px; font-size: 11px; padding: 0 4px; }
+.seq-wait .stepper-btns button { width: 18px; }
 .seq-move { display: inline-flex; flex-direction: column; }
 .seq-move .icon-btn { height: 14px; font-size: 10px; }
 .weld-totals-4 { grid-template-columns: repeat(4, 1fr); }
@@ -538,9 +808,19 @@
 .review-buttons kbd { margin-left: 6px; font-size: 10px; opacity: 0.7; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; }
 .review-nav { display: flex; justify-content: space-between; align-items: center; }
 .review-summary { margin: 0; font-size: 14px; color: var(--text); }
-.weld-player { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); display: grid; grid-template-columns: auto auto 1fr auto auto; grid-template-rows: auto auto; gap: 6px 8px; align-items: center; width: min(640px, calc(100% - 140px)); padding: 10px 12px; border-radius: var(--radius); background: var(--bg-panel); border: 1px solid var(--border-strong); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); z-index: 6; }
+.weld-player { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); display: grid; grid-template-columns: auto auto 1fr auto auto; grid-template-rows: auto auto; gap: 6px 8px; align-items: center; width: min(640px, calc(100% - 140px)); padding: 10px 12px; border-radius: var(--radius); background: color-mix(in srgb, var(--bg-panel) 88%, transparent); backdrop-filter: blur(8px); border: 1px solid var(--border-strong); border-top: 2px solid var(--accent); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06); z-index: 6; animation: player-in 280ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes player-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .weld-player-play { height: 32px; padding: 0 14px; white-space: nowrap; }
-.weld-player-range { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.weld-player-idle { animation: play-glow 2.2s ease-in-out infinite; }
+@keyframes play-glow { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 50% { box-shadow: 0 0 18px 2px color-mix(in srgb, var(--accent) 55%, transparent); } }
+.weld-player-range { width: 100%; cursor: pointer; appearance: none; -webkit-appearance: none; background: transparent; height: 22px; --p: 0%; }
+.weld-player-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--p), var(--border-strong) var(--p)); }
+.weld-player-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -5px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-panel); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent); transition: transform 120ms; }
+.weld-player-range::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.weld-player-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--border-strong); }
+.weld-player-range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+.weld-player-range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-panel); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent); }
+.weld-player .menu-select-view { min-width: 76px; }
 .weld-player-time { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
-.weld-player-speed { width: 64px; height: 28px; font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .weld-player, .weld-player-idle { animation: none; } }
 .weld-player-what { grid-column: 1 / -1; font-size: 12px; color: var(--text-muted); }

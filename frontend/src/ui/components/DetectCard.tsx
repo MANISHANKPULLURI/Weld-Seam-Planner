@@ -1,5 +1,6 @@
 import { autoMinLengthMm, useStore } from "../../state/store";
 import { detectWithSettings, detectionScope } from "../../lib/meshClient";
+import { NumberField } from "./NumberField";
 
 /**
  * detect seams and tune the detection settings
@@ -30,21 +31,9 @@ export function DetectCard() {
       <details className="disclosure">
         <summary>Detection settings</summary>
         <div className="field-grid">
-          <label className="field" title="Smallest bend between two faces that counts as a corner. Fillet welds need roughly 45-120°.">
-            <span className="field-label">Min bend (°)</span>
-            <span className="field-hint">How sharp a corner must be. 90° is a right angle.</span>
-            <input className="field-control" type="number" min={5} max={120} step={5} value={settings.featureAngleDeg} onChange={(e) => setSettings({ featureAngleDeg: clamp(Number(e.target.value), 5, 120) })} />
-          </label>
-          <label className="field" title="Shorter seams are skipped. Empty means automatic (1% of the part size).">
-            <span className="field-label">Min length (mm)</span>
-            <span className="field-hint">Ignore seams shorter than this.</span>
-            <input className="field-control" type="number" min={0} step={1} placeholder={`Auto (${autoMin})`} value={settings.minLengthMm ?? ""} onChange={(e) => setSettings({ minLengthMm: e.target.value === "" ? null : clamp(Number(e.target.value), 0, 1e6) })} />
-          </label>
-          <label className="field" title="How far apart two plates can be and still count as touching.">
-            <span className="field-label">Gap tolerance (mm)</span>
-            <span className="field-hint">Max gap for two parts to count as touching.</span>
-            <input className="field-control" type="number" min={0.001} max={5} step={0.05} value={settings.gapMm} onChange={(e) => setSettings({ gapMm: clamp(Number(e.target.value), 0.001, 5) })} />
-          </label>
+          <NumberField label="Min bend" unit="°" step={5} min={5} value={settings.featureAngleDeg} hint="How sharp a corner must be. 90° is a right angle." onChange={(v) => setSettings({ featureAngleDeg: clamp(v ?? 5, 5, 120) })} />
+          <NumberField label="Min length" unit="mm" step={1} min={0} placeholder={`Auto (${autoMin})`} value={settings.minLengthMm} hint="Ignore seams shorter than this." onChange={(v) => setSettings({ minLengthMm: v === null ? null : clamp(v, 0, 1e6) })} />
+          <NumberField label="Gap tolerance" unit="mm" step={0.05} min={0.001} value={settings.gapMm} hint="Max gap for two parts to count as touching." onChange={(v) => setSettings({ gapMm: clamp(v ?? 0.001, 0.001, 5) })} />
           <label className="field field-check" title="Also suggest outside edges, for corner joints welded from outside.">
             <input type="checkbox" checked={settings.includeOutside} onChange={(e) => setSettings({ includeOutside: e.target.checked })} />
             <span>Outside corners</span>

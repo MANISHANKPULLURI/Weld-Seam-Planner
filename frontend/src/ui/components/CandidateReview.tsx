@@ -98,8 +98,8 @@ export function CandidateReview({ onClose }: { onClose: () => void }) {
       <p className="result-explainer">{JOINT_HELP[seam.jointType]} The camera shows it in orange. Is this a real weld?</p>
       {status && <p className="field-hint">You {status} this one. Choose again to change it.</p>}
       <div className="review-buttons">
-        <button type="button" className="btn-secondary review-drop" onClick={() => decide("dropped")}>✕ Drop <kbd>D</kbd></button>
-        <button type="button" className="btn-primary review-keep" onClick={() => decide("kept")}>✓ Keep <kbd>K</kbd></button>
+        <button type="button" className="btn-secondary review-drop" onClick={() => decide("dropped")}><span className="tick" key={String(index)}>✕</span> Drop <kbd>D</kbd></button>
+        <button type="button" className="btn-primary review-keep" onClick={() => decide("kept")}><span className="tick" key={String(index)}>✓</span> Keep <kbd>K</kbd></button>
       </div>
       <div className="review-nav">
         <button type="button" className="btn-link" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>← Previous</button>

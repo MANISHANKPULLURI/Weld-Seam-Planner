@@ -232,6 +232,7 @@ export type Store = {
   rejectedIds: string[];
   selectedSeamId: string | null;
   hoverSeamId: string | null;
+  cardAnchor: { x: number; y: number } | null;
   featureChains: SeamPath[];
   detectSettings: DetectSettings;
   detection: Detection;
@@ -241,6 +242,10 @@ export type Store = {
   workArea: WorkArea | null;
   procedures: Procedure[];
   splitCuts: number[] | null;
+  procDraft: Procedure | null;
+  procEditId: string | null;
+  pendingImport: WeldJob | null;
+  confirm: { title: string; message: string; confirmLabel?: string; danger?: boolean; action: () => void } | null;
   focus: { bodies: number[]; label: string; box: { min: [number, number, number]; max: [number, number, number] } } | null;
   cameraTarget: { ids: string[]; at: number } | null;
   reviewing: boolean;
@@ -285,12 +290,17 @@ export type Store = {
   addSeam: (path: SeamPath, source: SeamSource) => string;
   selectSeam: (id: string | null) => void;
   setHoverSeam: (id: string | null) => void;
+  setCardAnchor: (anchor: { x: number; y: number } | null) => void;
   renameSeam: (id: string, name: string) => void;
   reverseSeam: (id: string) => void;
   deleteSeam: (id: string) => void;
   splitSeam: (id: string, segment: number, t: number) => void;
   splitSeamAt: (id: string, distancesMm: number[]) => string[];
   setSplitCuts: (cutsMm: number[] | null) => void;
+  setProcDraft: (p: Procedure | null) => void;
+  setProcEditId: (id: string | null) => void;
+  setPendingImport: (job: WeldJob | null) => void;
+  setConfirm: (c: Store["confirm"]) => void;
   setFocus: (focus: Store["focus"]) => void;
   frameSeams: (ids: string[]) => void;
   setReviewing: (on: boolean) => void;
@@ -343,6 +353,10 @@ const clearedPart = () => ({
   rejectedIds: [] as string[],
   selectedSeamId: null,
   hoverSeamId: null as string | null,
+  cardAnchor: null as { x: number; y: number } | null,
+  procDraft: null as Procedure | null,
+  procEditId: null as string | null,
+  confirm: null as Store["confirm"],
   featureChains: [] as SeamPath[],
   detection: { status: "idle", error: null, run: 0 } as Detection,
   pendingAction: null as PendingAction,
@@ -378,7 +392,7 @@ function snapshot(s: Store): WorkState {
   };
 }
 
-const transient = { focus: null, undo: null, redo: null, reviewing: false, phase: "checked" as Phase, selectedSeamId: null, pendingAction: null as PendingAction, splitCuts: null, error: null, section: null, workArea: null, xray: false };
+const transient = { focus: null, undo: null, redo: null, reviewing: false, phase: "checked" as Phase, selectedSeamId: null, pendingAction: null as PendingAction, splitCuts: null, procDraft: null as Procedure | null, procEditId: null as string | null, confirm: null as Store["confirm"], error: null, section: null, workArea: null, xray: false };
 
 const PROCEDURES_KEY = "weld.procedures.v1";
 
@@ -412,6 +426,10 @@ export const useStore = create<Store>((set, get) => ({
   redo: null,
   hoverSeamId: null,
   splitCuts: null,
+  procDraft: null,
+  procEditId: null,
+  pendingImport: null,
+  confirm: null,
   procedures: loadProcedures(),
   xray: false,
 
@@ -576,6 +594,7 @@ export const useStore = create<Store>((set, get) => ({
 
   selectSeam: (selectedSeamId) => set({ selectedSeamId, pendingAction: null, splitCuts: null }),
   setHoverSeam: (hoverSeamId) => set({ hoverSeamId }),
+  setCardAnchor: (cardAnchor) => set({ cardAnchor }),
 
   renameSeam: (id, name) => set((s) => {
     const next = name.trim().slice(0, MAX_SEAM_NAME);
@@ -640,6 +659,10 @@ export const useStore = create<Store>((set, get) => ({
     return { pendingAction, splitCuts: pendingAction === "split" && seam ? [Math.round(seamLengthMm(seam, s.frame.units) * 5) / 10] : null };
   }),
   setSplitCuts: (splitCuts) => set({ splitCuts }),
+  setProcDraft: (procDraft) => set({ procDraft }),
+  setProcEditId: (procEditId) => set({ procEditId }),
+  setPendingImport: (pendingImport) => set({ pendingImport }),
+  setConfirm: (confirm) => set({ confirm }),
 
   splitSeamAt: (id, distancesMm) => {
     const s = get();

@@ -1,5 +1,5 @@
 import type { UpAxis } from "../mesh/units.ts";
-import type { Procedure } from "../schema/procedure.ts";
+import type { Metal, Procedure } from "../schema/procedure.ts";
 
 export type Iso6947 = "PA" | "PB" | "PC" | "PD" | "PE" | "PF" | "PG" | "inclined";
 export type Aws = "1G" | "1F" | "2G" | "2F" | "3G" | "3F" | "4G" | "4F" | "inclined";
@@ -13,6 +13,7 @@ export const EXAMPLE_PROCEDURES: Procedure[] = [
     wire: { diameter_mm: 1.0 }, gas: { name: "Ar + 18% CO2", flow_l_min: 14 },
     electrical: { voltage_v: 22, current_a: 200, wire_feed_speed_m_min: 8 }, motion: { travel_speed_mm_min: 400 },
     thermal_efficiency_k: 0.8, limits: { heat_input_kj_mm: { min: 0.5, max: 1.5 }, travel_speed_mm_min: { min: 200, max: 900 }, max_throat_per_pass_mm: 6 },
+    material: { metal: "steel", thickness_mm: 6 },
     seam_defaults: { weld_size: { basis: "a", value_mm: 4 }, travel_angle_deg: 10, stick_out_mm: 15 },
   },
   {
@@ -20,6 +21,7 @@ export const EXAMPLE_PROCEDURES: Procedure[] = [
     wire: { diameter_mm: 1.2 }, gas: { name: "Argon", flow_l_min: 18 },
     electrical: { voltage_v: 21, current_a: 170, wire_feed_speed_m_min: 9 }, motion: { travel_speed_mm_min: 500 },
     thermal_efficiency_k: 0.8, limits: { heat_input_kj_mm: { min: 0.3, max: 1.0 }, travel_speed_mm_min: { min: 300, max: 1000 }, max_throat_per_pass_mm: 5 },
+    material: { metal: "aluminium", thickness_mm: 5 },
     seam_defaults: { weld_size: { basis: "a", value_mm: 4 }, travel_angle_deg: 10, stick_out_mm: 15 },
   },
   {
@@ -27,6 +29,7 @@ export const EXAMPLE_PROCEDURES: Procedure[] = [
     wire: { diameter_mm: 1.2 }, gas: { name: "Ar + 18% CO2", flow_l_min: 16 },
     electrical: { voltage_v: 26, current_a: 230, wire_feed_speed_m_min: 9 }, motion: { travel_speed_mm_min: 350 },
     thermal_efficiency_k: 0.8, limits: { heat_input_kj_mm: { min: 0.6, max: 2.0 }, travel_speed_mm_min: { min: 200, max: 700 }, max_throat_per_pass_mm: 8 },
+    material: { metal: "steel", thickness_mm: 8 },
     seam_defaults: { weld_size: { basis: "a", value_mm: 5 }, travel_angle_deg: -10, stick_out_mm: 20 },
   },
   {
@@ -34,11 +37,16 @@ export const EXAMPLE_PROCEDURES: Procedure[] = [
     wire: { diameter_mm: 1.6 }, gas: { name: "Argon", flow_l_min: 10 },
     electrical: { voltage_v: 12, current_a: 140, wire_feed_speed_m_min: null }, motion: { travel_speed_mm_min: 150 },
     thermal_efficiency_k: 0.6, limits: { heat_input_kj_mm: { min: 0.3, max: 1.2 }, travel_speed_mm_min: { min: 80, max: 300 }, max_throat_per_pass_mm: 3 },
+    material: { metal: "stainless", thickness_mm: 3 },
     seam_defaults: { weld_size: { basis: "a", value_mm: 3 }, travel_angle_deg: 10, stick_out_mm: 8 },
   },
 ];
 
 export const PROCESS_K: Record<Procedure["process"]["kind"], number> = { gmaw: 0.8, fcaw: 0.8, gtaw: 0.6 };
+
+export const PROCESS_METAL: Record<135 | 131 | 136 | 141, Metal> = { 135: "steel", 131: "aluminium", 136: "steel", 141: "stainless" };
+
+export const METAL_LABEL: Record<Metal, string> = { steel: "Steel", stainless: "Stainless steel", aluminium: "Aluminium", other: "Other" };
 
 
 /**

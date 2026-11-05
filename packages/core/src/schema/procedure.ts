@@ -39,6 +39,10 @@ export const processSchema = z.discriminatedUnion("kind", [
 ]).describe("Welding process discriminated by kind");
 
 
+export const metalSchema = z.enum(["steel", "stainless", "aluminium", "other"]).describe("Base metal the procedure is tuned for");
+
+export type Metal = z.infer<typeof metalSchema>;
+
 export const procedureSchema = z.object({
 
   id: z.string().describe("Stable procedure identifier"),
@@ -46,6 +50,14 @@ export const procedureSchema = z.object({
   name: z.string().describe("EXAMPLE preset name, never recommendation"),
 
   process: processSchema.describe("Process kind and ISO code"),
+
+  material: z.object({
+
+    metal: metalSchema,
+
+    thickness_mm: z.number().positive().nullable().describe("Plate thickness in millimetres or null when unset"),
+
+  }).optional().describe("Base metal and thickness; older jobs may omit it"),
 
   wire: z.object({
 

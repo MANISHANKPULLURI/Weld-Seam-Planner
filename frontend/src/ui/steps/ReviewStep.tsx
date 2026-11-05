@@ -3,6 +3,8 @@ import { sealWeldJob, weldJobSchema } from "@weld/core";
 import type { WeldJob } from "@weld/core";
 import { orderedSeams, previewJob, useStore } from "../../state/store";
 import { formatTime } from "../components/WeldSeamList";
+import { NumberField } from "../components/NumberField";
+import { MenuSelect } from "../components/MenuSelect";
 import { StepNav } from "../components/StepNav";
 import { PROCESS_LABEL } from "../components/ProcedureLibrary";
 
@@ -73,6 +75,24 @@ export function ReviewStep() {
     try {
       const parsed = weldJobSchema.safeParse(JSON.parse(await file.text()));
       if (!parsed.success) { setMessage(`Not a valid weld job: ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}`); return; }
+      const s = useStore.getState();
+      const mismatch = s.mesh && s.part?.sha256 && parsed.data.part.sha256 !== s.part.sha256;
+      if (mismatch) {
+        const job = parsed.data;
+        s.setConfirm({
+          title: "Different part loaded",
+          message: `This job was made for ${job.part.filename}. Replace the current part and its seams, then load that file to restore it?`,
+          confirmLabel: "Replace",
+          danger: true,
+          action: () => {
+            const st = useStore.getState();
+            st.setPendingImport(job);
+            st.loadAnother();
+            st.setStep("part");
+          },
+        });
+        return;
+      }
       setMessage(importJob(parsed.data));
     } catch {
       setMessage("That file is not JSON.");
@@ -81,6 +101,14 @@ export function ReviewStep() {
 
   return (
     <div className="seams-stack">
+      <details className="disclosure result-card" aria-label="How this step works">
+        <summary>How this step works</summary>
+        <ol className="seam-guide-steps">
+          <li><span className="seam-guide-num" aria-hidden="true">1</span><span><strong>Fix what blocks export.</strong> Errors block the JSON, warnings don't. Click one to jump to it.</span></li>
+          <li><span className="seam-guide-num" aria-hidden="true">2</span><span><strong>Name the job.</strong> Status draft means arc off; approved means arc on.</span></li>
+          <li><span className="seam-guide-num" aria-hidden="true">3</span><span><strong>Download or copy the JSON.</strong> Re-import it onto the same part later to restore everything.</span></li>
+        </ol>
+      </details>
       <section className="result-card">
         <header className="result-header"><span className="result-title">Weld job</span></header>
         <label className="field field-wide">
@@ -92,24 +120,15 @@ export function ReviewStep() {
           <textarea className="field-control job-notes" rows={2} value={state.job.notes} onChange={(e) => setJob({ notes: e.target.value })} />
         </label>
         <div className="field-grid">
-          <label className="field">
-            <span className="field-label">Status</span>
-            <select className="field-control" value={state.job.status} onChange={(e) => setJob({ status: e.target.value as "draft" | "approved" })}>
-              <option value="draft">Draft (arc off)</option>
-              <option value="approved">Approved (arc on)</option>
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Supervision</span>
-            <select className="field-control" value={state.job.supervision} onChange={(e) => setJob({ supervision: e.target.value as "operator_confirm" | "auto" })}>
-              <option value="operator_confirm">Operator confirms each seam</option>
-              <option value="auto">Automatic</option>
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Waypoint spacing (mm)</span>
-            <input className="field-control numeric" type="number" min={0.5} step={1} value={state.job.waypointSpacingMm} onChange={(e) => setJob({ waypointSpacingMm: Math.max(0.5, Number(e.target.value) || 5) })} />
-          </label>
+          <MenuSelect<"draft" | "approved"> label="Status" value={state.job.status} onChange={(v) => setJob({ status: v })} options={[
+            { value: "draft", label: "Draft (arc off)", hint: "Robot moves with the arc off. Safe to dry-run." },
+            { value: "approved", label: "Approved (arc on)", hint: "Robot welds for real." },
+          ]} />
+          <MenuSelect<"operator_confirm" | "auto"> label="Supervision" value={state.job.supervision} onChange={(v) => setJob({ supervision: v })} options={[
+            { value: "operator_confirm", label: "Operator confirms each seam", hint: "Robot waits for a person before every seam." },
+            { value: "auto", label: "Automatic", hint: "Robot runs the whole job alone." },
+          ]} />
+          <NumberField label="Waypoint spacing" unit="mm" step={1} min={0.5} value={state.job.waypointSpacingMm} hint="Distance between exported robot poses along a seam." onChange={(v) => setJob({ waypointSpacingMm: Math.max(0.5, v ?? 5) })} />
         </div>
       </section>
 

@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useStore } from "../../state/store";
 import type { ViewId } from "../../state/store";
-import { GridIcon, RefreshIcon, CubeIcon, FitIcon, TriangleIcon, LayersIcon, PanelLeftIcon } from "../icons";
+import { GridIcon, RefreshIcon, CubeIcon, FitIcon, TriangleIcon, LayersIcon } from "../icons";
+import { MenuSelect } from "./MenuSelect";
+import { SaveStatusLine } from "./WorkControls";
+
+const VIEW_IDS = ["iso", "top", "bottom", "front", "back", "left", "right"] as const;
 
 /**
  * render camera, view-mode and section controls
@@ -58,13 +62,13 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
     <>
       {}
       <div className="view-controls view-controls-top-left" role="toolbar" aria-label="Camera">
-        <button type="button" className="view-btn" onClick={() => setPanelCollapsed(!panelCollapsed)} aria-expanded={!panelCollapsed} aria-controls="planner-panel" aria-label={panelCollapsed ? "Open settings panel" : "Close settings panel"} title={panelCollapsed ? "Show panel" : "Hide panel (1-5 still switch steps)"}>
-          <PanelLeftIcon size={12} />
+        <button type="button" className="view-btn" onClick={() => setPanelCollapsed(!panelCollapsed)} aria-expanded={!panelCollapsed} aria-controls="planner-panel" aria-label={panelCollapsed ? "Open settings panel" : "Close settings panel"} title={panelCollapsed ? "Show panel" : "Hide panel"}>
+          <span className="hamburger" aria-hidden="true"><i /><i /><i /></span>
         </button>
-        <button type="button" className="view-btn" onClick={fit} aria-label="Fit model to view" title="Fit model (F)">
+        <button type="button" className="view-btn" onClick={fit} aria-label="Fit model to view" title="Fit model">
           <FitIcon size={12} /> Fit
         </button>
-        <button type="button" className="view-btn" onClick={reset} aria-label="Reset view" title="Reset / Frame (R)">
+        <button type="button" className="view-btn" onClick={reset} aria-label="Reset view" title="Reset view">
           <RefreshIcon size={12} /> Reset
         </button>
       </div>
@@ -73,16 +77,16 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
           <div className="view-settings-row">
             <div className="view-segmented" role="group" aria-label="Rendering mode">
               <button type="button" aria-pressed={viewMode === "solid"} onClick={() => mode("solid")} title="Solid, smooth shaded"><LayersIcon size={12} /> Solid</button>
-              <button type="button" aria-pressed={viewMode === "wireframe"} onClick={() => mode("wireframe")} title="Wireframe, all mesh edges"><GridIcon size={12} /> Wire</button>
-              <button type="button" aria-pressed={viewMode === "triangles"} onClick={() => mode("triangles")} title="Feature edges over the solid part (triangles mode)"><TriangleIcon size={12} /> Feature</button>
+              <button type="button" aria-pressed={viewMode === "wireframe"} onClick={() => mode("wireframe")} title="Wireframe, all mesh edges"><GridIcon size={12} /> Wireframe</button>
+              <button type="button" aria-pressed={viewMode === "triangles"} onClick={() => mode("triangles")} title="Feature edges over the solid part"><TriangleIcon size={12} /> Feature edges</button>
             </div>
             <div className="view-segmented" role="group" aria-label="Projection">
-              <button type="button" aria-pressed={projection === "perspective"} onClick={() => proj("perspective")} title="Perspective projection (FOV 45°)">Persp</button>
-              <button type="button" aria-pressed={projection === "orthographic"} onClick={() => proj("orthographic")} title="Orthographic projection (no perspective)">Ortho</button>
+              <button type="button" aria-pressed={projection === "perspective"} onClick={() => proj("perspective")} title="Perspective projection">Perspective</button>
+              <button type="button" aria-pressed={projection === "orthographic"} onClick={() => proj("orthographic")} title="Orthographic projection, no perspective">Orthographic</button>
             </div>
           </div>
           <div className="view-settings-row view-settings-row-right">
-            <button type="button" className="view-btn" aria-pressed={xray} onClick={() => setXray(!xray)} title="See through the part to find seams inside it (X)">
+            <button type="button" className="view-btn" aria-pressed={xray} onClick={() => setXray(!xray)} title="See through the part to find seams inside">
               X-ray
             </button>
             <button type="button" className="view-btn" aria-pressed={!!section} onClick={() => setSection(section ? null : { axis: "x", offset: 0.5, flipped: false })} title="Cut the part open to see inside">
@@ -95,18 +99,10 @@ export function ViewControls({ controller }: { controller: import("../../viewer/
 
       {}
       <div className="view-controls view-controls-bottom-right" role="group" aria-label="Standard views, Z up">
+        <SaveStatusLine />
         <label className="view-select-wrap" title="Standard view, Z up">
           <span className="view-select-label"><CubeIcon size={12} /> View</span>
-          <select
-            className="view-select"
-            value={view}
-            onChange={(e) => v(e.target.value as ViewId)}
-            aria-label="Standard view, Z up"
-          >
-            {(["iso", "top", "bottom", "front", "back", "left", "right"] as ViewId[]).map((id) => (
-              <option key={id} value={id}>{id === "iso" ? "Iso" : id.charAt(0).toUpperCase() + id.slice(1)}</option>
-            ))}
-          </select>
+          <MenuSelect<ViewId> label="View" value={view} openUp className="menu-select-view" onChange={(id) => v(id)} options={VIEW_IDS.map((id) => ({ value: id, label: id === "iso" ? "Iso" : id.charAt(0).toUpperCase() + id.slice(1) }))} />
         </label>
       </div>
     </>

@@ -3,9 +3,6 @@ import { focusForBody } from "../../lib/focus";
 import { formatCount } from "../../domain/mesh/describe";
 import { EyeIcon } from "../icons";
 
-/**
- * list the separate bodies to show or hide
- */
 export function BodiesCard() {
   const mesh = useStore((s) => s.mesh);
   const hidden = useStore((s) => s.hiddenBodies);

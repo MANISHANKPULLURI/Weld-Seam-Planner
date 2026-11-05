@@ -31,23 +31,15 @@ export function ProceduresStep() {
 function ProcGuide() {
   const seams = useStore((s) => s.seams.filter((x) => x.status === "accepted").length);
   const assigned = useStore((s) => s.seams.filter((x) => x.status === "accepted" && x.weld).length);
-  const steps = [
-    { done: false, title: "Choose a procedure", text: "Pick one in the list. Edit or copy it to match your welding procedure (WPS)." },
-    { done: seams > 0 && assigned === seams, title: "Apply it to seams", text: "Tick seams and press Apply, or use Apply to the ones without one." },
-    { done: false, title: "Adjust one seam (optional)", text: "Click a seam to set its weld size, stitches, torch angles or its own current and speed." },
-  ];
   return (
-    <section className="result-card seam-guide" aria-label="How this step works">
-      <header className="result-header"><span className="result-title">Set weld parameters</span></header>
+    <details className="disclosure result-card" aria-label="How this step works">
+      <summary>How this step works</summary>
       <ol className="seam-guide-steps">
-        {steps.map((s, i) => (
-          <li key={s.title} className={s.done ? "is-done" : ""}>
-            <span className="seam-guide-num" aria-hidden="true">{s.done ? "✓" : i + 1}</span>
-            <span><strong>{s.title}.</strong> {s.text}</span>
-          </li>
-        ))}
+        <li className={assigned === seams && seams > 0 ? "is-done" : ""}><span className="seam-guide-num" aria-hidden="true">{assigned === seams && seams > 0 ? "✓" : 1}</span><span><strong>Choose a procedure.</strong> Pick one in the list. Edit, copy, or start a blank one with New custom to match your welding procedure (WPS).</span></li>
+        <li className={assigned === seams && seams > 0 ? "is-done" : ""}><span className="seam-guide-num" aria-hidden="true">{assigned === seams && seams > 0 ? "✓" : 2}</span><span><strong>Apply it to seams.</strong> Tick seams and press Apply, or use Apply to the ones without one.</span></li>
+        <li><span className="seam-guide-num" aria-hidden="true">3</span><span><strong>Adjust one seam (optional).</strong> Pick a seam to set its weld size, stitches, torch angles or its own current and speed.</span></li>
       </ol>
       <p className="result-explainer">{assigned} of {seams} seams have a procedure.{seams > 0 && assigned === seams ? " Next: Sequence, to set the welding order." : ""}</p>
-    </section>
+    </details>
   );
 }

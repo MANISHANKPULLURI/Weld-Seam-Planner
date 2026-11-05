@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { seamLengthMm, useStore } from "../../state/store";
 import type { Seam } from "../../state/store";
+import { NumberField } from "./NumberField";
 
 
 
@@ -38,7 +39,7 @@ export function SplitPanel({ seam }: { seam: Seam }) {
           <input className="split-range" type="range" min={0} max={length} step={0.1} value={at} onChange={(e) => setSplitCuts([round(Number(e.target.value))])} aria-label="Cut position" />
           <label className="split-mm">
             Cut at
-            <input className="field-control numeric" type="number" min={0.1} max={length - 0.1} step={0.5} value={round(at)} onChange={(e) => setSplitCuts([Math.min(length - 0.1, Math.max(0.1, Number(e.target.value) || 0))])} />
+            <NumberField inline label="Cut at" unit="mm" step={0.5} min={0.1} value={round(at)} onChange={(v) => setSplitCuts([Math.min(length - 0.1, Math.max(0.1, v ?? 0))])} />
             mm from the start dot
           </label>
           <p className="field-hint">Or move along the seam on the part: the cut follows the cursor. Click there to split.</p>
@@ -46,7 +47,7 @@ export function SplitPanel({ seam }: { seam: Seam }) {
       ) : (
         <label className="split-mm">
           Cut into
-          <input className="field-control numeric" type="number" min={2} max={50} step={1} value={parts} onChange={(e) => { const n = Math.min(50, Math.max(2, Math.round(Number(e.target.value) || 2))); setParts(n); setSplitCuts(even(n)); }} />
+          <NumberField inline label="Cut into" step={1} min={2} value={parts} onChange={(v) => { const n = Math.min(50, Math.max(2, Math.round(v ?? 2))); setParts(n); setSplitCuts(even(n)); }} />
           equal parts
         </label>
       )}

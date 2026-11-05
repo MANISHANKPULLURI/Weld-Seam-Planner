@@ -1,9 +1,11 @@
-import { useState } from "react";
 import { Logo } from "./Logo";
+import { ProjectSwitcher } from "./components/ProjectSwitcher";
+import { ConfirmHost } from "./components/ConfirmHost";
 import { WorkControls } from "./components/WorkControls";
+import { ToggleTheme } from "../components/lightswind/toggle-theme";
+import { useThemeSync } from "../lib/theme";
 import { useStore } from "../state/store";
 import type { Step } from "../state/store";
-import { SunIcon, MoonIcon } from "./icons";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "part", label: "Part" },
@@ -13,9 +15,6 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "review", label: "Review" },
 ];
 
-/**
- * render the planner frame with steps and viewport
- */
 export function AppShell({ children, viewport }: { children: React.ReactNode; viewport: React.ReactNode }) {
   const phase = useStore((s) => s.phase);
   const step = useStore((s) => s.step);
@@ -23,44 +22,44 @@ export function AppShell({ children, viewport }: { children: React.ReactNode; vi
   const setStep = useStore((s) => s.setStep);
   const checked = phase === "checked";
   const collapsed = useStore((s) => s.panelCollapsed);
-  const [theme, setTheme] = useState(() => (typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") || "dark" : "dark"));
-  if (typeof document !== "undefined" && !document.documentElement.getAttribute("data-theme")) {
-    document.documentElement.setAttribute("data-theme", "dark");
-  }
+  useThemeSync();
 
   return (
     <div className={`planner-root${collapsed ? " planner-root-panel-collapsed" : ""}`}>
+      <ConfirmHost />
       <header className="planner-topbar planner-topbar-split">
-        <a href="#/" className="planner-topbar-left" aria-label="Armatrix home">
-          <Logo height={14} />
-        </a>
+        <div className="planner-topbar-group planner-topbar-left-group">
+          <a href="#/" className="planner-topbar-left" aria-label="Armatrix home">
+            <Logo height={14} />
+          </a>
+          <ProjectSwitcher />
+        </div>
         <span className="planner-wordmark planner-wordmark-center">Weld Seam Planner</span>
         <div className="planner-topbar-right">
           <WorkControls />
-          <button type="button" className="theme-toggle" onClick={() => { const next = theme === "dark" ? "light" : "dark"; setTheme(next); document.documentElement.setAttribute("data-theme", next); window.dispatchEvent(new CustomEvent("themechange")); }} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>
-            <span key={theme} className="theme-toggle-icon">{theme === "dark" ? <SunIcon size={16} /> : <MoonIcon size={16} />}</span>
-          </button>
+          <ToggleTheme duration={500} animationType="circle-spread" />
         </div>
       </header>
       <aside id="planner-panel" className="planner-panel" aria-hidden={collapsed}>
-        <ol className="planner-steps" aria-label="Steps">
+        <ol className="step-timeline" aria-label="Steps">
           {STEPS.map((s, idx) => {
             const isActive = step === s.id;
             const isLocked = s.id !== "part" && !checked;
+            const done = STEPS.findIndex((x) => x.id === step) > idx;
             return (
-              <li key={s.id}>
+              <li key={s.id} className={`step-node${isActive ? " step-node-active" : ""}${done ? " step-node-done" : ""}${isLocked ? " step-node-locked" : ""}`}>
                 <button
                   type="button"
-                  className={`planner-step${isActive ? " planner-step-active" : ""}${isLocked ? " planner-step-locked" : ""}`}
+                  className="step-dot"
                   aria-current={isActive ? "step" : undefined}
-                  aria-disabled={isLocked}
-                  title={isLocked ? "Load a part first" : undefined}
+                  aria-label={`${idx + 1}. ${s.label}${isActive ? " (current step)" : ""}${isLocked ? " (locked)" : ""}`}
+                  title={isLocked ? `${s.label} — load a part first` : `${s.label} (${idx + 1})`}
                   onClick={() => { if (!isLocked) setStep(s.id); }}
                   disabled={isLocked}
                 >
-                  <span className="planner-step-index">{idx + 1}</span>
-                  <span className="planner-step-label">{s.label}</span>
+                  <span aria-hidden="true">{idx + 1}</span>
                 </button>
+                <span className="step-node-label" aria-hidden="true">{s.label}</span>
               </li>
             );
           })}

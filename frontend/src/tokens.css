@@ -23,6 +23,7 @@
 }
 
 :root {
+  color-scheme: dark;
   /* Armatrix palette — copy-paste ready HEX per spec */
 
   /* Dark Forest */
@@ -73,7 +74,6 @@
 
   --border: var(--rev-green);
   --border-strong: var(--rev-green-t1);
-  --active-step: var(--rev-green-t1);
   --grid-main: var(--rev-green-t3);
   --grid-sub: var(--rev-green);
   --candidate: var(--rev-green-t4);
@@ -103,27 +103,29 @@
   --radius-sm: 6px;
   --font: "42dot Sans", system-ui, sans-serif;
 
-  /* Clean Technical Studio (light-mode only): soft warm neutrals, no clinical white. */
-  --studio-bg: #F7F7F4;
-  --studio-panel: #FFFFFF;
-  --studio-raised: #EEF0EB;
-  --studio-border: #D5D8D0;
+  /* Clean Technical Studio (light-mode only): warm sand neutrals, one step down from glare. */
+  --studio-bg: #E8E8DE;
+  --studio-panel: #F1F1E8;
+  --studio-raised: #E2E2D6;
   --studio-text: #11160E;
-  --studio-text-secondary: #656B5E;
+  --studio-text-secondary: #4A5045;
+  --studio-text-muted: #5C624F;
+  --studio-border: #C6CAB9;
+  --studio-border-strong: #A9AE9D;
   --studio-accent: #E67300;
   --studio-active: #3E522E;
   --studio-warning: #C96E14;
 }
 
 html[data-theme="light"] {
+  color-scheme: light;
   --bg-page: var(--studio-bg);
   --bg-viewport: var(--studio-bg);
   --bg-panel: var(--studio-panel);
   --bg-raised: var(--studio-raised);
   --bg-topbar: var(--studio-panel);
   --border: var(--studio-border);
-  --border-strong: var(--studio-border);
-  --active-step: var(--studio-active);
+  --border-strong: var(--studio-border-strong);
   --grid-main: #B9BEB2;
   --grid-sub: #D8DCD2;
   --candidate: var(--rev-green-t4);
@@ -132,8 +134,10 @@ html[data-theme="light"] {
   --section-cap: var(--dark-forest-t4);
   --text: var(--studio-text);
   --text-secondary: var(--studio-text-secondary);
-  --text-muted: var(--studio-text-secondary);
-  --text-on-accent: #FFFFFF;
+  --text-muted: var(--studio-text-muted);
+  --text-on-accent: var(--studio-text);
+  --danger: #B3261E;
+  --danger-text: #B3261E;
   --part-solid: var(--studio-text-secondary);
   --part-wire: var(--studio-text);
   --axis-x: #C23B2E;
@@ -146,14 +150,25 @@ html[data-theme="light"] {
   --warning: var(--studio-warning);
 }
 
-html[data-theme="light"] .planner-step-active {
-  color: #FFFFFF;
+html[data-theme="light"] .step-node-active .step-dot {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
-html[data-theme="light"] .planner-step-active .planner-step-label { color: #FFFFFF; }
-html[data-theme="light"] .planner-step-active .planner-step-index {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.45);
-  color: #FFFFFF;
+html[data-theme="light"] .step-node-label { color: var(--studio-text); }
+html[data-theme="light"] .step-dot { border-color: var(--studio-text-secondary); color: var(--studio-text); }
+/* Light mode: hovered/clicked controls go near-black, never green. */
+html[data-theme="light"] .btn-secondary:hover,
+html[data-theme="light"] .planner-collapse-btn:hover,
+html[data-theme="light"] .theme-toggle:hover,
+html[data-theme="light"] .edge-btn:hover,
+html[data-theme="light"] .gizmo-btn:hover { background: #11160E; color: var(--light-sand); border-color: #11160E; }
+html[data-theme="light"] .icon-btn-ok:hover { color: var(--studio-text); }
+html[data-theme="light"] .chip[aria-pressed="true"] { border-color: var(--studio-text); }
+html[data-theme="light"] .proc-row:hover { border-color: var(--studio-text-secondary); }
+/* Light mode: kept/done states read near-black, never green. */
+html[data-theme="light"] .step-node-done .step-dot {
+  background: #11160E;
+  border-color: #11160E;
+  color: var(--light-sand);
 }
 
 /* Contrast verification WCAG AA
@@ -168,7 +183,10 @@ html[data-theme="light"] .planner-step-active .planner-step-index {
    warning on raised   #E9B475 on #192600 = 8.53:1 PASS
    LIGHT STUDIO (#F7F7F4 / #FFFFFF / #EEF0EB, text #11160E)
    main on panel       #11160E on #FFFFFF = ~15.5:1 PASS >=4.5
-   secondary on panel  #656B5E on #FFFFFF = ~5.2:1 PASS >=4.5
-   CTA on light        #FFFFFF on #E67300 = ~3.4:1 UI PASS >=3 (large/bold); body text uses #11160E
-   warning on light   #C96E14 on #FFFFFF = ~3.6:1 UI PASS >=3; body warnings keep #11160E text
+   secondary on panel  #4A5045 on #FFFFFF = ~8:1 PASS >=4.5
+   muted on panel      #5C624F on #FFFFFF = ~6:1 PASS >=4.5
+   button text on CTA  #11160E on #E67300 = ~5.4:1 PASS >=4.5
+   done dot            #F7F7F4 on #11160E = ~15:1 PASS
+   danger on panel     #B3261E on #FFFFFF = ~7:1 PASS >=4.5
+   warning on panel    #C96E14 on #FFFFFF = ~3.6:1 UI PASS >=3 (body copy stays #11160E)
 */

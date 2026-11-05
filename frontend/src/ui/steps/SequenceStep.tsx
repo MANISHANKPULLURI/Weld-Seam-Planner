@@ -21,14 +21,14 @@ export function SequenceStep() {
 
   return (
     <div className="seams-stack">
-      <section className="result-card seam-guide" aria-label="How this step works">
-        <header className="result-header"><span className="result-title">Set the welding order</span></header>
+      <details className="disclosure result-card" aria-label="How this step works">
+        <summary>How this step works</summary>
         <ol className="seam-guide-steps">
-          <li><span className="seam-guide-num">1</span><span><strong>Auto order</strong> finds a short route and picks each seam's direction, or drag rows to reorder.</span></li>
-          <li><span className="seam-guide-num">2</span><span><strong>⇄</strong> swaps a seam's direction. The part shows numbers, arrows and dashed air moves.</span></li>
-          <li><span className="seam-guide-num">3</span><span>Add a <strong>wait</strong> after a seam to let it cool (interpass time).</span></li>
+          <li><span className="seam-guide-num" aria-hidden="true">1</span><span><strong>Auto order</strong> finds a short route and picks each seam's direction, or drag rows to reorder.</span></li>
+          <li><span className="seam-guide-num" aria-hidden="true">2</span><span><strong>⇄</strong> swaps a seam's direction. The part shows numbers, arrows and dashed air moves.</span></li>
+          <li><span className="seam-guide-num" aria-hidden="true">3</span><span>Add a <strong>wait</strong> after a seam to let it cool (interpass time).</span></li>
         </ol>
-      </section>
+      </details>
 
       <section className="result-card">
         <div className="seq-tools">
@@ -50,8 +50,8 @@ export function SequenceStep() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => { if (dragId) moveInSequence(dragId, i); setDragId(null); }}
               onDragEnd={() => setDragId(null)}
+              title="Drag to reorder"
             >
-              <span className="seq-grip" aria-hidden="true">⋮⋮</span>
               <span className="seq-num numeric">{i + 1}</span>
               <button type="button" className="seq-main" onClick={() => selectSeam(x.id === state.selectedSeamId ? null : x.id)}>
                 <span className="seam-row-name"><span className="seam-swatch" style={{ background: seamColor(x) }} aria-hidden="true" /> {x.name}</span>
@@ -59,7 +59,8 @@ export function SequenceStep() {
               </button>
               <button type="button" className="icon-btn" title="Weld the other way" aria-label={`Reverse ${x.name}`} onClick={() => reverseSeam(x.id)} disabled={x.closed}>⇄</button>
               <label className="seq-wait" title="Wait after this seam, seconds">
-                <input className="field-control numeric" type="number" min={0} step={5} value={state.waits[x.id] ?? 0} onChange={(e) => setWait(x.id, Number(e.target.value) || 0)} aria-label={`Wait after ${x.name}`} />s
+                <NumberField inline label={`Wait after ${x.name}`} unit="s" step={5} min={0} value={state.waits[x.id] ?? 0} onChange={(v) => setWait(x.id, v ?? 0)} />
+                <span aria-hidden="true">s</span>
               </label>
               <span className="seq-move">
                 <button type="button" className="icon-btn" aria-label={`Move ${x.name} up`} disabled={i === 0} onClick={() => moveInSequence(x.id, i - 1)}>↑</button>
