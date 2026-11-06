@@ -1,0 +1,16 @@
+services:
+  weld-planner:
+    image: manishank/weld-planner:v1
+    container_name: weld
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      MAX_FILE_MB: "500"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8000/api/v1/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
