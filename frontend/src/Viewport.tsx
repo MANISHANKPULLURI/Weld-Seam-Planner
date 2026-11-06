@@ -498,7 +498,7 @@ export default function Viewport() {
         </div>
       )}
       {step === "procedures" && procDraft && (
-        <FloatCard key={procDraft.id} wide title={<span className="proc-draft-name">Custom procedure</span>} label="New custom procedure" min={floatMin} onToggleMin={() => setFloatMin((v) => !v)} onClose={() => useStore.getState().setProcDraft(null)} style={floatPos} footer={<><button type="button" className="btn-secondary" onClick={() => useStore.getState().setProcDraft(null)}>Discard</button><button type="button" className="btn-primary" onClick={() => { const s = useStore.getState(); if (s.procDraft) { s.saveProcedure(s.procDraft); s.setProcDraft(null); } }}>Apply changes</button></>}>
+        <FloatCard key={procDraft.id} wide title={<span className="proc-draft-name">Custom procedure</span>} label="New custom procedure" min={floatMin} onToggleMin={() => setFloatMin((v) => !v)} onClose={() => useStore.getState().setProcDraft(null)} style={{ left: 12, top: 12 }} footer={<><button type="button" className="btn-secondary" onClick={() => useStore.getState().setProcDraft(null)}>Discard</button><button type="button" className="btn-primary" onClick={() => { const s = useStore.getState(); if (s.procDraft) { s.saveProcedure(s.procDraft); s.setProcDraft(null); } }}>Apply changes</button></>}>
           <p className="result-explainer">Set your own values, then Apply to add it to the library.</p>
           <ProcedureForm procedure={procDraft} onChange={(p) => useStore.getState().setProcDraft(p)} />
         </FloatCard>

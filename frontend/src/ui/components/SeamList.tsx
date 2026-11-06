@@ -63,7 +63,7 @@ export function SeamList() {
       {allCandidates.length > 0 && (
         <details className="disclosure result-card">
           <summary>All model seams <span className="numeric">{candidates.length}{candidates.length !== allCandidates.length ? ` of ${allCandidates.length}` : ""}</span></summary>
-          <div className="result-actions result-actions-split">
+          <div className="result-actions result-actions-stack">
             <button type="button" className="btn-primary" onClick={() => { const ids = candidates.map((c) => c.id); if (ids.length > 5) { useStore.getState().setConfirm({ title: "Accept shown?", message: `Accept ${ids.length} candidates? You can undo right after.`, confirmLabel: "Accept", action: () => useStore.getState().acceptSeams(ids) }); } else acceptSeams(ids); }} disabled={candidates.length === 0} title="Accept every candidate shown (undoable)">✓ Accept shown</button>
             <button type="button" className="btn-ghost btn-danger" onClick={() => { const ids = candidates.map((c) => c.id); if (ids.length > 5) { useStore.getState().setConfirm({ title: "Reject shown?", message: `Reject ${ids.length} candidates? You can undo right after.`, confirmLabel: "Reject", danger: true, action: () => useStore.getState().rejectSeams(ids) }); } else rejectSeams(ids); }} disabled={candidates.length === 0} title="Reject every candidate shown (undoable)">✕ Reject shown</button>
           </div>

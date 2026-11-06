@@ -192,6 +192,8 @@
 
 .result-actions.result-actions-split { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .result-actions.result-actions-split > button { width: 100%; padding: 0 12px; }
+.result-actions.result-actions-stack { display: grid; grid-auto-flow: row; gap: 8px; }
+.result-actions.result-actions-stack > button { width: 100%; }
 
 .btn-link {
   align-self: flex-start;
